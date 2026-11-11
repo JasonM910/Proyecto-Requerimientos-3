@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import AuthScreen from './components/AuthScreen.jsx'
+import CitizenReports from './components/CitizenReports.jsx'
 import Dashboard from './components/Dashboard.jsx'
-import ReportIntegrationPlaceholder from './components/ReportIntegrationPlaceholder.jsx'
 import {
   getCurrentSession,
   registerCitizen,
@@ -21,6 +21,19 @@ const KNOWN_PATHS = new Set([
 
 function currentPath() {
   return window.location.pathname.replace(/\/+$/, '') || '/'
+}
+
+function getReportId(path) {
+  const match = path.match(/^\/ciudadano\/reportes\/([^/]+)$/)
+  if (!match) {
+    return null
+  }
+
+  try {
+    return decodeURIComponent(match[1])
+  } catch {
+    return null
+  }
 }
 
 function homeForRole(role) {
@@ -44,7 +57,7 @@ function resolvePath(path, session) {
     return '/municipal'
   }
 
-  return KNOWN_PATHS.has(path)
+  return KNOWN_PATHS.has(path) || getReportId(path) !== null
     ? path
     : session
       ? homeForRole(session.role)
@@ -180,14 +193,17 @@ export default function App() {
     )
   }
 
-  if (
-    effectivePath === '/ciudadano/reportes' ||
-    effectivePath === '/ciudadano/reportes/nuevo'
-  ) {
+  if (effectivePath.startsWith('/ciudadano/reportes')) {
     return (
-      <ReportIntegrationPlaceholder
-        type={
+      <CitizenReports
+        page={
           effectivePath === '/ciudadano/reportes/nuevo' ? 'create' : 'list'
+        }
+        reportId={
+          effectivePath === '/ciudadano/reportes' ||
+          effectivePath === '/ciudadano/reportes/nuevo'
+            ? null
+            : getReportId(effectivePath)
         }
         user={session}
         onNavigate={navigate}

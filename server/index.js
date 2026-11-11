@@ -6,13 +6,22 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const DATA_DIR = path.join(ROOT_DIR, 'data')
-const DATABASE_PATH = path.join(DATA_DIR, 'database.json')
+const DATABASE_PATH = path.resolve(
+  process.env.REPORTE_CIUDADANO_DATABASE_PATH ??
+    path.join(DATA_DIR, 'database.json'),
+)
 const DIST_DIR = path.join(ROOT_DIR, 'dist')
 const SESSION_COOKIE = 'reporte_ciudadano_session'
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 8
 const PASSWORD_ITERATIONS = 120_000
 const PASSWORD_BYTES = 32
 const MAX_REQUEST_BYTES = 16 * 1024
+const DATABASE_VERSION = 2
+const REPORT_CATEGORIES = new Set([
+  'Infraestructura',
+  'Limpieza',
+  'Espacios públicos',
+])
 const PORT = Number(process.env.PORT) || 5173
 const IS_PRODUCTION = process.argv.includes('--production')
 
@@ -68,18 +77,22 @@ function derivePasswordHash(password, salt) {
 
 function createEmptyDatabase() {
   return {
-    version: 1,
+    version: DATABASE_VERSION,
     accounts: [],
     sessions: [],
+    reports: [],
   }
 }
 
 function validateDatabase(database) {
   if (
     !database ||
-    database.version !== 1 ||
+    ![1, DATABASE_VERSION].includes(database.version) ||
     !Array.isArray(database.accounts) ||
-    !Array.isArray(database.sessions)
+    !Array.isArray(database.sessions) ||
+    (database.reports !== undefined && !Array.isArray(database.reports)) ||
+    (database.version === DATABASE_VERSION &&
+      !Array.isArray(database.reports))
   ) {
     throw new Error('El archivo JSON de la base de datos no tiene un formato válido.')
   }
@@ -132,7 +145,7 @@ function updateDatabase(update) {
 }
 
 async function initializeDatabase() {
-  await mkdir(DATA_DIR, { recursive: true })
+  await mkdir(path.dirname(DATABASE_PATH), { recursive: true })
 
   try {
     await readDatabase()
@@ -149,27 +162,35 @@ async function initializeDatabase() {
   }
 
   await updateDatabase(async (database) => {
+    const needsMigration =
+      database.version !== DATABASE_VERSION ||
+      !Array.isArray(database.reports)
+    database.version = DATABASE_VERSION
+    database.reports ??= []
+
     const existing = database.accounts.find(
       (account) => account.email === DEMO_MUNICIPAL_ACCOUNT.email,
     )
-    if (existing) {
+    if (existing && !needsMigration) {
       return { changed: false }
     }
 
-    const salt = randomBytes(16)
-    const passwordHash = await derivePasswordHash(
-      DEMO_MUNICIPAL_ACCOUNT.password,
-      salt,
-    )
-    database.accounts.push({
-      id: DEMO_MUNICIPAL_ACCOUNT.id,
-      name: DEMO_MUNICIPAL_ACCOUNT.name,
-      email: DEMO_MUNICIPAL_ACCOUNT.email,
-      role: DEMO_MUNICIPAL_ACCOUNT.role,
-      salt: salt.toString('hex'),
-      passwordHash: passwordHash.toString('hex'),
-      createdAt: new Date().toISOString(),
-    })
+    if (!existing) {
+      const salt = randomBytes(16)
+      const passwordHash = await derivePasswordHash(
+        DEMO_MUNICIPAL_ACCOUNT.password,
+        salt,
+      )
+      database.accounts.push({
+        id: DEMO_MUNICIPAL_ACCOUNT.id,
+        name: DEMO_MUNICIPAL_ACCOUNT.name,
+        email: DEMO_MUNICIPAL_ACCOUNT.email,
+        role: DEMO_MUNICIPAL_ACCOUNT.role,
+        salt: salt.toString('hex'),
+        passwordHash: passwordHash.toString('hex'),
+        createdAt: new Date().toISOString(),
+      })
+    }
 
     return { changed: true }
   })
@@ -248,6 +269,33 @@ function publicAccount(account) {
   }
 }
 
+function publicReport(report) {
+  return {
+    id: report.id,
+    description: report.description,
+    category: report.category,
+    community: report.community,
+    locationReference: report.locationReference,
+    createdAt: report.createdAt,
+    status: report.status,
+  }
+}
+
+async function requireCitizen(request) {
+  const account = await findCurrentAccount(request)
+  if (!account) {
+    throw new HttpError(401, 'Iniciá sesión para continuar.')
+  }
+  if (account.role !== 'citizen') {
+    throw new HttpError(
+      403,
+      'Esta operación está disponible únicamente para cuentas ciudadanas.',
+    )
+  }
+
+  return account
+}
+
 async function createSession(account, response) {
   const token = randomBytes(32).toString('hex')
   const expiresAt = Date.now() + SESSION_MAX_AGE_SECONDS * 1000
@@ -298,6 +346,23 @@ async function findCurrentAccount(request) {
 }
 
 async function handleApiRequest(request, response, pathname) {
+  if (pathname === '/api/auth/accounts' && request.method === 'GET') {
+    const database = await readDatabase()
+    const accounts = database.accounts.map((account) => ({
+      id: account.id,
+      name: account.name,
+      email: account.email,
+      role: account.role,
+      ...(account.demoPassword
+        ? { password: account.demoPassword }
+        : account.id === DEMO_MUNICIPAL_ACCOUNT.id
+        ? { password: DEMO_MUNICIPAL_ACCOUNT.password }
+        : {}),
+    }))
+    sendJson(response, 200, { accounts })
+    return
+  }
+
   if (pathname === '/api/auth/register' && request.method === 'POST') {
     const body = await readJsonBody(request)
     const name = typeof body.name === 'string' ? body.name.trim() : ''
@@ -332,6 +397,7 @@ async function handleApiRequest(request, response, pathname) {
       role: 'citizen',
       salt: salt.toString('hex'),
       passwordHash: passwordHash.toString('hex'),
+      demoPassword: password,
       createdAt: new Date().toISOString(),
     }
 
@@ -387,6 +453,19 @@ async function handleApiRequest(request, response, pathname) {
       )
     }
 
+    if (account.role === 'citizen' && account.demoPassword !== password) {
+      await updateDatabase((currentDatabase) => {
+        const currentAccount = currentDatabase.accounts.find(
+          (item) => item.id === account.id,
+        )
+        if (!currentAccount || currentAccount.demoPassword === password) {
+          return { changed: false }
+        }
+        currentAccount.demoPassword = password
+        return { changed: true }
+      })
+    }
+
     const user = await createSession(account, response)
     sendJson(response, 200, { user })
     return
@@ -415,6 +494,130 @@ async function handleApiRequest(request, response, pathname) {
 
     clearSessionCookie(response)
     sendJson(response, 200, { ok: true })
+    return
+  }
+
+  if (pathname === '/api/reports' && request.method === 'POST') {
+    const account = await requireCitizen(request)
+    const body = await readJsonBody(request)
+    const description =
+      typeof body.description === 'string' ? body.description.trim() : ''
+    const category = typeof body.category === 'string' ? body.category : ''
+    const community =
+      typeof body.community === 'string' ? body.community.trim() : ''
+    const locationReference =
+      typeof body.locationReference === 'string'
+        ? body.locationReference.trim()
+        : ''
+    const idempotencyKey = request.headers['idempotency-key']
+
+    if (!description) {
+      throw new HttpError(400, 'Escribí una descripción del problema.')
+    }
+    if (!REPORT_CATEGORIES.has(category)) {
+      throw new HttpError(400, 'Seleccioná una categoría para el reporte.')
+    }
+    if (!community) {
+      throw new HttpError(400, 'Ingresá la comunidad o localidad.')
+    }
+    if (!locationReference) {
+      throw new HttpError(400, 'Ingresá una referencia para ubicar el problema.')
+    }
+    if (
+      typeof idempotencyKey !== 'string' ||
+      !/^[a-zA-Z0-9_-]{16,100}$/.test(idempotencyKey)
+    ) {
+      throw new HttpError(
+        400,
+        'No se pudo identificar el envío. Volvé a intentarlo.',
+      )
+    }
+
+    const result = await updateDatabase((database) => {
+      const existing = database.reports.find(
+        (report) =>
+          report.citizenId === account.id &&
+          report.idempotencyKey === idempotencyKey,
+      )
+      if (existing) {
+        return {
+          changed: false,
+          value: { report: publicReport(existing), created: false },
+        }
+      }
+
+      const now = new Date()
+      const datePart = now.toISOString().slice(0, 10).replaceAll('-', '')
+      let id
+      do {
+        id = `RC-${datePart}-${randomBytes(4).toString('hex').toUpperCase()}`
+      } while (database.reports.some((report) => report.id === id))
+
+      const report = {
+        id,
+        citizenId: account.id,
+        idempotencyKey,
+        description,
+        category,
+        community,
+        locationReference,
+        createdAt: now.toISOString(),
+        status: 'Recibido',
+      }
+      database.reports.push(report)
+
+      return {
+        changed: true,
+        value: { report: publicReport(report), created: true },
+      }
+    })
+
+    sendJson(response, result.created ? 201 : 200, result)
+    return
+  }
+
+  if (pathname === '/api/reports' && request.method === 'GET') {
+    const account = await requireCitizen(request)
+    const reports = await updateDatabase((database) => ({
+      changed: false,
+      value: database.reports
+        .filter((report) => report.citizenId === account.id)
+        .sort(
+          (left, right) =>
+            right.createdAt.localeCompare(left.createdAt) ||
+            right.id.localeCompare(left.id),
+        )
+        .map(publicReport),
+    }))
+
+    sendJson(response, 200, { reports })
+    return
+  }
+
+  const reportMatch = pathname.match(/^\/api\/reports\/([^/]+)$/)
+  if (reportMatch && request.method === 'GET') {
+    const account = await requireCitizen(request)
+    let reportId
+    try {
+      reportId = decodeURIComponent(reportMatch[1])
+    } catch {
+      throw new HttpError(404, 'No se encontró ese reporte.')
+    }
+
+    const report = await updateDatabase((database) => ({
+      changed: false,
+      value:
+        database.reports.find(
+          (item) =>
+            item.id === reportId && item.citizenId === account.id,
+        ) ?? null,
+    }))
+
+    if (!report) {
+      throw new HttpError(404, 'No se encontró ese reporte.')
+    }
+
+    sendJson(response, 200, { report: publicReport(report) })
     return
   }
 

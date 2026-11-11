@@ -1,10 +1,3 @@
-export const DEMO_MUNICIPAL_ACCOUNT = Object.freeze({
-  name: 'Personal municipal',
-  email: 'municipal@reporteciudadano.cr',
-  password: 'Municipal2026!',
-  role: 'municipal',
-})
-
 async function request(path, options = {}) {
   let response
   try {
@@ -72,6 +65,11 @@ export async function registerCitizen({ name, email, password, confirmation }) {
   })
 
   return result.user
+}
+
+export async function getLoginAccounts() {
+  const result = await request('/api/auth/accounts')
+  return result.accounts
 }
 
 export async function signIn({ email, password }) {

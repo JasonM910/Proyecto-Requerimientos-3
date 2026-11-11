@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { DEMO_MUNICIPAL_ACCOUNT } from '../services/authService.js'
+import { useEffect, useState } from 'react'
+import { getLoginAccounts } from '../services/authService.js'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -53,6 +53,42 @@ export default function AuthScreen({
   const [errors, setErrors] = useState({})
   const [formError, setFormError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [accounts, setAccounts] = useState([])
+  const [accountsError, setAccountsError] = useState('')
+  const [isLoadingAccounts, setIsLoadingAccounts] = useState(!isRegister)
+
+  useEffect(() => {
+    if (isRegister) {
+      return undefined
+    }
+
+    let active = true
+    getLoginAccounts()
+      .then((availableAccounts) => {
+        if (active) {
+          setAccounts(availableAccounts)
+          setAccountsError('')
+        }
+      })
+      .catch((error) => {
+        if (active) {
+          setAccountsError(
+            error instanceof Error
+              ? error.message
+              : 'No se pudieron cargar las cuentas disponibles.',
+          )
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setIsLoadingAccounts(false)
+        }
+      })
+
+    return () => {
+      active = false
+    }
+  }, [isRegister])
 
   function updateField(event) {
     const { name, value } = event.target
@@ -61,11 +97,11 @@ export default function AuthScreen({
     setFormError('')
   }
 
-  function fillMunicipalDemo() {
+  function selectAccount(account) {
     setValues((current) => ({
       ...current,
-      email: DEMO_MUNICIPAL_ACCOUNT.email,
-      password: DEMO_MUNICIPAL_ACCOUNT.password,
+      email: account.email,
+      password: account.password ?? '',
     }))
     setErrors({})
     setFormError('')
@@ -289,23 +325,43 @@ export default function AuthScreen({
           </p>
 
           {!isRegister && (
-            <aside className="demo-card" aria-label="Cuenta municipal de demostración">
-              <div className="demo-heading">
-                <span className="demo-icon" aria-hidden="true">
-                  M
-                </span>
-                <div>
-                  <strong>Acceso municipal de demostración</strong>
-                  <p>Cuenta ficticia para probar la vista municipal.</p>
-                </div>
+            <aside className="accounts-card" aria-label="Cuentas disponibles">
+              <div className="accounts-heading">
+                <strong>Cuentas</strong>
+                <p>
+                  Elegí una cuenta para completar sus datos de inicio de sesión
+                  de demostración.
+                </p>
               </div>
-              <button
-                className="button button-outline demo-fill"
-                type="button"
-                onClick={fillMunicipalDemo}
-              >
-                Completar datos de acceso
-              </button>
+              {isLoadingAccounts ? (
+                <p className="accounts-message" role="status">
+                  Cargando cuentas…
+                </p>
+              ) : accountsError ? (
+                <p className="accounts-message accounts-error" role="alert">
+                  {accountsError}
+                </p>
+              ) : accounts.length > 0 ? (
+                <div className="account-options">
+                  {accounts.map((account) => (
+                    <button
+                      className="button button-outline account-option"
+                      key={account.id}
+                      type="button"
+                      onClick={() => selectAccount(account)}
+                    >
+                      <span>{account.name}</span>
+                      <span className="account-option-role">
+                        {account.role === 'municipal' ? 'Municipal' : 'Ciudadana'}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="accounts-message">
+                  Todavía no hay cuentas registradas.
+                </p>
+              )}
             </aside>
           )}
         </div>

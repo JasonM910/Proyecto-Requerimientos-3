@@ -111,7 +111,7 @@ function CitizenHome({ user, onNavigate }) {
             <span className="eyebrow">Tu espacio ciudadano</span>
             <h2 id="citizen-actions">¿Cómo podemos ayudarte?</h2>
           </div>
-          <p>Las opciones de reportes se irán habilitando en los siguientes incrementos.</p>
+          <p>Creá un reporte y consultá su estado desde tu cuenta.</p>
         </div>
 
         <div className="action-grid">
@@ -146,7 +146,7 @@ function CitizenHome({ user, onNavigate }) {
             </span>
             <span className="action-card-title">Consultar mis reportes</span>
             <span className="action-card-copy">
-              Próximamente vas a poder consultar tus casos y su seguimiento.
+              Revisá los casos que registraste y el estado actual de cada uno.
             </span>
             <span className="action-card-link">Ir a la sección <span aria-hidden="true">→</span></span>
           </button>
