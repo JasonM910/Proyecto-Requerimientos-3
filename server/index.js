@@ -3,6 +3,7 @@ import { createServer } from 'node:http'
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { MAX_PHOTOS, MAX_PHOTO_BYTES, PHOTO_TYPES, photoValidationError } from '../shared/photoRules.js'
 
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const DATA_DIR = path.join(ROOT_DIR, 'data')
@@ -16,6 +17,8 @@ const SESSION_MAX_AGE_SECONDS = 60 * 60 * 8
 const PASSWORD_ITERATIONS = 120_000
 const PASSWORD_BYTES = 32
 const MAX_REQUEST_BYTES = 16 * 1024
+// Tres imágenes de 5 MiB codificadas en base64, más los campos del reporte.
+const MAX_REPORT_REQUEST_BYTES = MAX_PHOTOS * Math.ceil(MAX_PHOTO_BYTES / 3) * 4 + MAX_REQUEST_BYTES
 const DATABASE_VERSION = 2
 const REPORT_CATEGORIES = new Set([
   'Infraestructura',
@@ -236,16 +239,18 @@ function sendJson(response, status, value, headers = {}) {
   response.end(JSON.stringify(value))
 }
 
-async function readJsonBody(request) {
+async function readJsonBody(request, maxBytes = MAX_REQUEST_BYTES) {
   let size = 0
   const chunks = []
 
   for await (const chunk of request) {
     size += chunk.length
-    if (size > MAX_REQUEST_BYTES) {
-      throw new HttpError(413, 'La solicitud excede el tamaño permitido.')
+    if (size <= maxBytes) {
+      chunks.push(chunk)
     }
-    chunks.push(chunk)
+  }
+  if (size > maxBytes) {
+    throw new HttpError(413, 'La solicitud excede el tamaño permitido.')
   }
 
   try {
@@ -278,7 +283,82 @@ function publicReport(report) {
     locationReference: report.locationReference,
     createdAt: report.createdAt,
     status: report.status,
+    photos: (report.photos ?? []).map((photo) => publicPhoto(report.id, photo)),
   }
+}
+
+function publicPhoto(reportId, photo) {
+  return {
+    id: photo.id,
+    name: photo.name,
+    type: photo.type,
+    size: photo.size,
+    url: `/api/reports/${encodeURIComponent(reportId)}/photos/${encodeURIComponent(photo.id)}`,
+  }
+}
+
+function validatePhotos(value = []) {
+  if (!Array.isArray(value)) {
+    throw new HttpError(400, 'Las fotografías deben enviarse como una lista.')
+  }
+  if (value.length > MAX_PHOTOS) {
+    throw new HttpError(400, 'Podés adjuntar un máximo de tres fotografías.')
+  }
+
+  const seen = new Set()
+  const photos = []
+  for (const photo of value) {
+    if (!photo || typeof photo.name !== 'string' || !photo.name.trim() || photo.name.length > 255) {
+      throw new HttpError(400, 'Cada fotografía debe tener un nombre válido de hasta 255 caracteres.')
+    }
+    if (!PHOTO_TYPES.includes(photo.type)) {
+      throw new HttpError(400, `${photo.name}: solo se admiten fotografías JPEG y PNG.`)
+    }
+    if (typeof photo.data !== 'string' || !photo.data.length) {
+      throw new HttpError(400, `${photo.name}: el archivo está vacío o no contiene una fotografía válida.`)
+    }
+    if (photo.data.length > Math.ceil(MAX_PHOTO_BYTES / 3) * 4) {
+      throw new HttpError(400, `${photo.name}: la fotografía supera el máximo de 5 MB.`)
+    }
+    const bytes = Buffer.from(photo.data, 'base64')
+    if (bytes.toString('base64') !== photo.data) {
+      throw new HttpError(400, `${photo.name}: la fotografía no tiene una codificación válida.`)
+    }
+    const validationError = photoValidationError({ type: photo.type, size: bytes.length })
+    if (validationError) throw new HttpError(400, `${photo.name}: ${validationError}`)
+
+    const isPng = bytes.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex'))
+    const isJpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+    if ((photo.type === 'image/png' && !isPng) || (photo.type === 'image/jpeg' && !isJpeg)) {
+      throw new HttpError(400, `${photo.name}: el contenido no corresponde a una fotografía JPEG o PNG válida.`)
+    }
+    if (seen.has(photo.data)) continue
+    seen.add(photo.data)
+    photos.push({
+      id: randomBytes(16).toString('hex'),
+      name: photo.name.trim(),
+      type: photo.type,
+      size: bytes.length,
+      data: photo.data,
+    })
+  }
+  return photos
+}
+
+async function findAccessibleEvidenceReport(request, reportId) {
+  const account = await findCurrentAccount(request)
+  if (!account) throw new HttpError(401, 'Iniciá sesión para consultar las fotografías.')
+  const report = await updateDatabase((database) => ({
+    changed: false,
+    value: database.reports.find((item) =>
+      item.id === reportId && (
+        (account.role === 'citizen' && item.citizenId === account.id) ||
+        account.role === 'municipal'
+      ),
+    ) ?? null,
+  }))
+  if (!report) throw new HttpError(404, 'No se encontró ese reporte.')
+  return report
 }
 
 async function requireCitizen(request) {
@@ -499,7 +579,7 @@ async function handleApiRequest(request, response, pathname) {
 
   if (pathname === '/api/reports' && request.method === 'POST') {
     const account = await requireCitizen(request)
-    const body = await readJsonBody(request)
+    const body = await readJsonBody(request, MAX_REPORT_REQUEST_BYTES)
     const description =
       typeof body.description === 'string' ? body.description.trim() : ''
     const category = typeof body.category === 'string' ? body.category : ''
@@ -533,6 +613,7 @@ async function handleApiRequest(request, response, pathname) {
       )
     }
 
+    const photos = validatePhotos(body.photos)
     const result = await updateDatabase((database) => {
       const existing = database.reports.find(
         (report) =>
@@ -563,6 +644,7 @@ async function handleApiRequest(request, response, pathname) {
         locationReference,
         createdAt: now.toISOString(),
         status: 'Recibido',
+        photos,
       }
       database.reports.push(report)
 
@@ -591,6 +673,37 @@ async function handleApiRequest(request, response, pathname) {
     }))
 
     sendJson(response, 200, { reports })
+    return
+  }
+
+  // Solo evidencias: no habilita la bandeja ni el detalle municipal de HU-09/HU-10.
+  const photosMatch = pathname.match(/^\/api\/reports\/([^/]+)\/photos(?:\/([^/]+))?$/)
+  if (photosMatch && request.method === 'GET') {
+    let reportId
+    let photoId
+    try {
+      reportId = decodeURIComponent(photosMatch[1])
+      photoId = photosMatch[2] ? decodeURIComponent(photosMatch[2]) : null
+    } catch {
+      throw new HttpError(404, 'No se encontró esa fotografía.')
+    }
+    const report = await findAccessibleEvidenceReport(request, reportId)
+    if (!photoId) {
+      sendJson(response, 200, { photos: (report.photos ?? []).map((photo) => publicPhoto(report.id, photo)) })
+      return
+    }
+    const photo = (report.photos ?? []).find((item) => item.id === photoId)
+    if (!photo) throw new HttpError(404, 'No se encontró esa fotografía.')
+    const bytes = Buffer.from(photo.data, 'base64')
+    response.writeHead(200, {
+      'Content-Type': photo.type,
+      'Content-Length': bytes.length,
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': "default-src 'none'; sandbox",
+      'Cross-Origin-Resource-Policy': 'same-origin',
+    })
+    response.end(bytes)
     return
   }
 
@@ -716,6 +829,15 @@ async function startServer() {
     const { createServer: createViteServer } = await import('vite')
     vite = await createViteServer({
       server: {
+        // La base contiene sesiones y evidencias privadas; Vite no debe servirla.
+        fs: {
+          deny: [
+            '.env', '.env.*', '*.{crt,pem,key,p12,pfx,cer,der}',
+            '.npmrc', '.yarnrc.yml', '**/.git/**', '**/data/**',
+            DATABASE_PATH.replaceAll('\\', '/'),
+            `${DATABASE_PATH.replaceAll('\\', '/')}.tmp-*`,
+          ],
+        },
         middlewareMode: true,
         hmr: { server },
       },

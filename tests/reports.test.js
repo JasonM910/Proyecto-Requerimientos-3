@@ -80,7 +80,10 @@ function createClient() {
 
       return {
         status: response.status,
-        body: await response.json(),
+        body: response.headers.get('content-type')?.includes('application/json')
+          ? await response.json()
+          : Buffer.from(await response.arrayBuffer()),
+        headers: response.headers,
         elapsed: Number(response.headers.get('server-timing-ms') ?? 0),
       }
     },
@@ -107,6 +110,38 @@ async function registerAndSignIn(client, name, email, password) {
   return login.body.user
 }
 
+async function startTestServer() {
+  const port = await findAvailablePort()
+  serverUrl = `http://127.0.0.1:${port}`
+  serverOutput = ''
+  serverProcess = spawn(process.execPath, [SERVER_PATH], {
+    cwd: ROOT_DIR,
+    env: {
+      ...process.env,
+      PORT: String(port),
+      REPORTE_CIUDADANO_DATABASE_PATH: DATABASE_PATH,
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  serverProcess.stdout.setEncoding('utf8')
+  serverProcess.stderr.setEncoding('utf8')
+  serverProcess.stdout.on('data', (chunk) => {
+    serverOutput += chunk
+  })
+  serverProcess.stderr.on('data', (chunk) => {
+    serverOutput += chunk
+  })
+  await waitForServer()
+}
+
+async function stopTestServer() {
+  if (serverProcess && serverProcess.exitCode === null) {
+    const exited = once(serverProcess, 'exit')
+    serverProcess.kill()
+    await exited
+  }
+}
+
 before(async () => {
   await writeFile(
     DATABASE_PATH,
@@ -127,35 +162,11 @@ before(async () => {
     }),
     { encoding: 'utf8', flag: 'wx' },
   )
-  const port = await findAvailablePort()
-  serverUrl = `http://127.0.0.1:${port}`
-  serverProcess = spawn(process.execPath, [SERVER_PATH], {
-    cwd: ROOT_DIR,
-    env: {
-      ...process.env,
-      PORT: String(port),
-      REPORTE_CIUDADANO_DATABASE_PATH: DATABASE_PATH,
-    },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
-  serverProcess.stdout.setEncoding('utf8')
-  serverProcess.stderr.setEncoding('utf8')
-  serverProcess.stdout.on('data', (chunk) => {
-    serverOutput += chunk
-  })
-  serverProcess.stderr.on('data', (chunk) => {
-    serverOutput += chunk
-  })
-
-  await waitForServer()
+  await startTestServer()
 })
 
 after(async () => {
-  if (serverProcess && serverProcess.exitCode === null) {
-    const exited = once(serverProcess, 'exit')
-    serverProcess.kill()
-    await exited
-  }
+  await stopTestServer()
   await rm(DATABASE_PATH, { force: true })
 })
 
@@ -523,4 +534,193 @@ test('HU-06 lista 100 reportes en orden descendente y conserva el detalle', asyn
   assert.equal(detail.body.report.description, 'Reporte de prueba 0.')
   assert.equal(detail.body.report.locationReference, 'Parque número 0')
   assert.equal(detail.body.report.status, 'Recibido')
+})
+
+const EVIDENCE_REPORT = {
+  description: 'Problema con evidencia fotográfica.',
+  category: 'Infraestructura',
+  community: 'Cartago',
+  locationReference: 'Frente a la escuela',
+}
+
+async function fixturePhoto(index = 1) {
+  const name = `evidence-${index}.${index === 2 ? 'jpg' : 'png'}`
+  const bytes = await readFile(path.join(ROOT_DIR, 'tests', 'fixtures', name))
+  return { name, type: index === 2 ? 'image/jpeg' : 'image/png', data: bytes.toString('base64') }
+}
+
+function submitEvidence(client, key, photos) {
+  return client.request('/api/reports', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': key },
+    body: { ...EVIDENCE_REPORT, photos },
+  })
+}
+
+test('HU-07 registra cero, una, dos y tres fotografías; conserva bytes y asociación', async () => {
+  const citizen = createClient()
+  await registerAndSignIn(citizen, 'Evidencias', 'evidences@example.cr', 'Evidences-2026')
+  const photos = await Promise.all([1, 2, 3].map(fixturePhoto))
+  const created = []
+  for (let count = 0; count <= 3; count += 1) {
+    const result = await submitEvidence(citizen, `evidence-count-submission-${count}`, photos.slice(0, count))
+    assert.equal(result.status, 201)
+    assert.equal(result.body.report.photos.length, count)
+    assert.equal(result.body.report.description, EVIDENCE_REPORT.description)
+    created.push(result.body.report)
+    const detail = await citizen.request(`/api/reports/${result.body.report.id}`)
+    assert.deepEqual(detail.body.report, result.body.report)
+    for (let index = 0; index < count; index += 1) {
+      const metadata = detail.body.report.photos[index]
+      assert.equal('data' in metadata, false)
+      assert.equal(metadata.name, photos[index].name)
+      const image = await citizen.request(metadata.url)
+      assert.equal(image.status, 200)
+      assert.equal(image.headers.get('content-type'), photos[index].type)
+      assert.equal(image.headers.get('cache-control'), 'no-store')
+      assert.deepEqual(image.body, Buffer.from(photos[index].data, 'base64'))
+    }
+  }
+  // Un identificador válido de fotografía no funciona dentro de otro caso.
+  assert.equal((await citizen.request(`/api/reports/${created[1].id}/photos/${created[2].photos[0].id}`)).status, 404)
+  const stored = JSON.parse(await readFile(DATABASE_PATH, 'utf8'))
+  assert.equal(stored.reports.find((report) => report.id === created[3].id).photos[2].data, photos[2].data)
+  const list = await citizen.request('/api/reports')
+  assert.equal(list.body.reports.length, 4)
+  assert.equal(JSON.stringify(list.body).includes(photos[0].data), false)
+})
+
+test('HU-07 rechaza cuarta imagen, formatos, tamaño, contenido y codificación sin crear reportes parciales', async () => {
+  const citizen = createClient()
+  await registerAndSignIn(citizen, 'Validación', 'photo-validation@example.cr', 'Validation-2026')
+  const png = await fixturePhoto()
+  const tooLarge = Buffer.alloc(5 * 1024 * 1024 + 1)
+  Buffer.from(png.data, 'base64').copy(tooLarge)
+  const cases = [
+    { photos: [png, png, png, png], error: /máximo de tres/i },
+    { photos: [{ ...png, type: 'image/gif' }], error: /JPEG y PNG/i },
+    { photos: [{ ...png, type: 'image/svg+xml' }], error: /JPEG y PNG/i },
+    { photos: [{ ...png, data: tooLarge.toString('base64') }], error: /5 MB/i },
+    { photos: [{ ...png, data: Buffer.from('No es una imagen').toString('base64') }], error: /contenido/i },
+    { photos: [{ ...png, type: 'image/jpeg' }], error: /contenido/i },
+    { photos: [{ ...png, data: '%%%=' }], error: /codificación/i },
+    { photos: [{ ...png, data: '' }], error: /vacío/i },
+    { photos: [null], error: /nombre/i },
+    { photos: null, error: /lista/i },
+  ]
+  for (const [index, invalid] of cases.entries()) {
+    const result = await submitEvidence(citizen, `invalid-evidence-key-${index}`, invalid.photos)
+    assert.equal(result.status, 400)
+    assert.match(result.body.error, invalid.error)
+    assert.equal((await citizen.request('/api/reports')).body.reports.length, 0)
+  }
+  // Se acepta exactamente 5 MiB (imagen válida con bytes de relleno al final).
+  const atLimit = tooLarge.subarray(0, 5 * 1024 * 1024)
+  const accepted = await submitEvidence(citizen, 'evidence-at-limit-key-0001', [{ ...png, data: atLimit.toString('base64') }])
+  assert.equal(accepted.status, 201)
+  assert.equal(accepted.body.report.photos[0].size, atLimit.length)
+})
+
+test('HU-07 un envío concurrente repetido no duplica el reporte ni sus fotografías', async () => {
+  const citizen = createClient()
+  await registerAndSignIn(citizen, 'Idempotencia', 'photos-idempotent@example.cr', 'Idempotent-2026')
+  const photo = await fixturePhoto()
+  const results = await Promise.all(Array.from({ length: 3 }, () =>
+    submitEvidence(citizen, 'same-evidence-request-key-0001', [photo, photo]),
+  ))
+  assert.deepEqual(results.map((result) => result.status).sort(), [200, 200, 201])
+  const first = results[0].body.report
+  assert.equal(first.photos.length, 1)
+  for (const result of results) assert.deepEqual(result.body.report, first)
+  assert.equal((await citizen.request('/api/reports')).body.reports.length, 1)
+})
+
+test('HU-08 protege bytes y metadatos entre cuentas; permite al rol municipal solo consultar evidencias', async () => {
+  const owner = createClient()
+  const other = createClient()
+  const anonymous = createClient()
+  const municipal = createClient()
+  await registerAndSignIn(owner, 'Dueño', 'photo-owner@example.cr', 'Owner-2026')
+  await registerAndSignIn(other, 'Otra cuenta', 'photo-other@example.cr', 'Other-2026')
+  const photo = await fixturePhoto(2)
+  const { body } = await submitEvidence(owner, 'evidence-authorization-key-0001', [photo])
+  const report = body.report
+  const metadataUrl = `/api/reports/${report.id}/photos`
+  const imageUrl = report.photos[0].url
+  for (const url of [metadataUrl, imageUrl]) {
+    assert.equal((await anonymous.request(url)).status, 401)
+    assert.equal((await other.request(url)).status, 404)
+    assert.equal((await owner.request(url)).status, 200)
+  }
+  await municipal.request('/api/auth/login', { method: 'POST', body: { email: MUNICIPAL_EMAIL, password: MUNICIPAL_PASSWORD } })
+  assert.equal((await municipal.request('/api/reports')).status, 403)
+  assert.equal((await municipal.request(`/api/reports/${report.id}`)).status, 403)
+  const metadata = await municipal.request(metadataUrl)
+  assert.deepEqual(metadata.body.photos, report.photos)
+  assert.deepEqual((await municipal.request(imageUrl)).body, Buffer.from(photo.data, 'base64'))
+  await owner.request('/api/auth/logout', { method: 'POST' })
+  assert.equal((await owner.request(imageUrl)).status, 401)
+  assert.equal((await other.request('/api/reports')).body.reports.length, 0)
+})
+
+test('HU-08 conserva evidencias después de salir, reiniciar el servidor y volver a ingresar', async () => {
+  const citizen = createClient()
+  const credentials = { email: 'photo-persistence@example.cr', password: 'Persistent-2026' }
+  await registerAndSignIn(citizen, 'Persistencia', credentials.email, credentials.password)
+  const photo = await fixturePhoto(3)
+  const result = await submitEvidence(citizen, 'evidence-persistence-key-0001', [photo])
+  const report = result.body.report
+  await citizen.request('/api/auth/logout', { method: 'POST' })
+  await stopTestServer()
+  await startTestServer()
+  assert.equal((await citizen.request(report.photos[0].url)).status, 401)
+  await citizen.request('/api/auth/login', { method: 'POST', body: credentials })
+  const detail = await citizen.request(`/api/reports/${report.id}`)
+  assert.deepEqual(detail.body.report, report)
+  assert.deepEqual((await citizen.request(report.photos[0].url)).body, Buffer.from(photo.data, 'base64'))
+})
+
+test('HU-08 los reportes anteriores sin colección de fotos siguen siendo consultables', async () => {
+  const citizen = createClient()
+  await registerAndSignIn(citizen, 'Reporte previo', 'legacy-photo-report@example.cr', 'Legacy-2026')
+  const result = await submitEvidence(citizen, 'evidence-legacy-report-key-0001', [])
+  const reportId = result.body.report.id
+  const database = JSON.parse(await readFile(DATABASE_PATH, 'utf8'))
+  delete database.reports.find((report) => report.id === reportId).photos
+  await writeFile(DATABASE_PATH, JSON.stringify(database), 'utf8')
+  assert.deepEqual((await citizen.request(`/api/reports/${reportId}`)).body.report.photos, [])
+  assert.deepEqual((await citizen.request(`/api/reports/${reportId}/photos`)).body.photos, [])
+})
+
+test('HU-08 impide descargar la base privada desde Vite, incluso mediante @fs o ?raw', async () => {
+  const anonymous = createClient()
+  const databaseUrl = `/@fs/${DATABASE_PATH.replaceAll('\\', '/')}`
+  for (const url of [databaseUrl, `${databaseUrl}?raw`, '/data/database.json', '/data/database.json?raw']) {
+    const response = await anonymous.request(url)
+    assert.equal(response.status, 403, url)
+    assert.equal(response.body.toString().includes('passwordHash'), false)
+  }
+})
+
+test('HU-07 admite tres fotos de 5 MiB y rechaza una solicitud que exceda el límite total', async () => {
+  const citizen = createClient()
+  await registerAndSignIn(citizen, 'Tres máximos', 'photos-max-total@example.cr', 'Maximum-2026')
+  const png = await fixturePhoto()
+  const photos = Array.from({ length: 3 }, (_, index) => {
+    const bytes = Buffer.alloc(5 * 1024 * 1024)
+    Buffer.from(png.data, 'base64').copy(bytes)
+    bytes[bytes.length - 1] = index
+    return { ...png, name: `limite-${index}.png`, data: bytes.toString('base64') }
+  })
+  const result = await submitEvidence(citizen, 'evidence-three-max-key-0001', photos)
+  assert.equal(result.status, 201)
+  assert.equal(result.body.report.photos.length, 3)
+  assert.ok(result.body.report.photos.every((photo) => photo.size === 5 * 1024 * 1024))
+  const oversized = await citizen.request('/api/reports', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': 'evidence-total-too-big-0001' },
+    body: { ...EVIDENCE_REPORT, description: 'x'.repeat(32 * 1024), photos },
+  })
+  assert.equal(oversized.status, 413)
+  assert.equal((await citizen.request('/api/reports')).body.reports.length, 1)
 })

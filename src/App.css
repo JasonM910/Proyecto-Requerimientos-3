@@ -1196,6 +1196,134 @@
   border-top: 1px solid #edf0ed;
 }
 
+.photo-optional {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.photo-upload {
+  padding: 16px;
+  background: #f7faf7;
+  border: 1px dashed #b6cbbb;
+  border-radius: 12px;
+}
+
+.photo-upload input[type='file'] {
+  max-width: 100%;
+  height: auto;
+  padding: 8px;
+  background: #fff;
+  font-size: 12px;
+}
+
+.photo-upload input::file-selector-button {
+  margin-right: 10px;
+  padding: 8px 10px;
+  color: var(--brand);
+  background: #eaf3eb;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.photo-count {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.photo-errors ul {
+  margin: 0;
+  padding-left: 18px;
+  overflow-wrap: anywhere;
+}
+
+.photo-errors li + li {
+  margin-top: 6px;
+}
+
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  gap: 12px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.photo-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.photo-card img {
+  display: block;
+  width: 100%;
+  height: 160px;
+  object-fit: contain;
+  background: #f0f4f0;
+}
+
+.photo-card-copy {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.photo-name {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.photo-remove {
+  min-height: 36px;
+  padding: 8px;
+  font-size: 11px;
+}
+
+.photo-open {
+  display: block;
+  color: var(--brand);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.photo-open > span {
+  display: block;
+  padding: 10px 12px 0;
+}
+
+.photo-open:hover > span {
+  text-decoration: underline;
+}
+
+.photo-open:focus-visible {
+  outline-offset: -3px;
+}
+
+.photo-unavailable {
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.evidence-gallery {
+  margin: 24px 0;
+  padding: 22px clamp(20px, 3vw, 26px) 0;
+  border-top: 1px solid var(--line);
+}
+
+.evidence-gallery h2 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+
 .form-section-heading {
   display: flex;
   align-items: flex-start;

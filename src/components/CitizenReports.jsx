@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AppHeader } from './Dashboard.jsx'
+import PhotoPicker from './PhotoPicker.jsx'
+import EvidenceGallery from './EvidenceGallery.jsx'
 import {
   createCitizenReport,
   getCitizenReport,
@@ -116,10 +118,14 @@ function ReportForm({ user, onNavigate, onSignOut }) {
   const [formError, setFormError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [createdReport, setCreatedReport] = useState(null)
+  const [photos, setPhotos] = useState([])
+  const [isReadingPhotos, setIsReadingPhotos] = useState(false)
+  const photoReadLock = useRef(false)
   const submissionLock = useRef(false)
   const idempotencyKey = useRef(newIdempotencyKey())
 
   function updateField(event) {
+    if (submissionLock.current) return
     const { name, value } = event.target
     setValues((current) => ({ ...current, [name]: value }))
     setErrors((current) => ({ ...current, [name]: '' }))
@@ -128,7 +134,7 @@ function ReportForm({ user, onNavigate, onSignOut }) {
 
   async function handleSubmit(event) {
     event.preventDefault()
-    if (submissionLock.current) {
+    if (submissionLock.current || photoReadLock.current) {
       return
     }
 
@@ -161,10 +167,16 @@ function ReportForm({ user, onNavigate, onSignOut }) {
           category: values.category,
           community: values.community.trim(),
           locationReference: values.locationReference.trim(),
+          photos: photos.map((photo) => ({
+            name: photo.name,
+            type: photo.type,
+            data: photo.dataUrl.split(',')[1],
+          })),
         },
         idempotencyKey.current,
       )
       setCreatedReport(report)
+      setPhotos([])
     } catch (error) {
       setFormError(
         error instanceof Error
@@ -187,6 +199,7 @@ function ReportForm({ user, onNavigate, onSignOut }) {
     setErrors({})
     setFormError('')
     setCreatedReport(null)
+    setPhotos([])
     idempotencyKey.current = newIdempotencyKey()
   }
 
@@ -409,12 +422,22 @@ function ReportForm({ user, onNavigate, onSignOut }) {
             </div>
           </section>
 
+          <PhotoPicker
+            photos={photos}
+            onChange={setPhotos}
+            disabled={isSubmitting}
+            onBusyChange={(busy) => {
+              photoReadLock.current = busy
+              setIsReadingPhotos(busy)
+            }}
+          />
+
           <div className="report-form-footer">
             <p>Podés revisar y corregir la información antes de enviar.</p>
             <button
               className="button button-primary report-submit"
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isReadingPhotos}
             >
               {isSubmitting ? 'Enviando reporte…' : 'Enviar reporte'}
               {!isSubmitting && <span aria-hidden="true">→</span>}
@@ -436,8 +459,8 @@ function ReportForm({ user, onNavigate, onSignOut }) {
           <section className="report-photo-note">
             <span aria-hidden="true">◇</span>
             <p>
-              En este sprint no es necesario adjuntar fotografías. Podrás
-              agregar evidencia en una entrega posterior.
+              Las fotografías son opcionales. Podés adjuntar hasta tres para
+              ayudar a comprender el problema, o enviar el reporte sin ellas.
             </p>
           </section>
           <StatusGuide />
@@ -693,6 +716,8 @@ function ReportDetail({ reportId, user, onNavigate, onSignOut }) {
               </dd>
             </div>
           </dl>
+
+          <EvidenceGallery photos={report.photos} />
 
           <p className="report-status-immutable">
             El estado de este reporte no se puede modificar desde la cuenta
