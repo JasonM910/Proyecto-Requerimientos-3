@@ -2171,3 +2171,243 @@
     padding: 15px;
   }
 }
+
+/* HU-09 / RF-18: bandeja municipal */
+.municipal-empty .button {
+  margin-top: 6px;
+}
+
+.inbox-filters {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 18px;
+  padding: 18px 20px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.inbox-filters .form-field {
+  min-width: 220px;
+  flex: 1 1 220px;
+}
+
+.inbox-filters select {
+  width: 100%;
+  min-height: 47px;
+  padding: 11px 13px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid #cfd9d2;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 14px;
+}
+
+.inbox-filters select:focus-visible {
+  outline: 3px solid rgb(23 102 79 / 28%);
+  outline-offset: 1px;
+  border-color: var(--brand);
+}
+
+.inbox-filters .button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.inbox-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 18px;
+}
+
+.inbox-section {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.inbox-section[aria-busy='true'] {
+  opacity: 0.65;
+}
+
+.inbox-table-wrap {
+  overflow-x: auto;
+}
+
+.inbox-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  text-align: left;
+}
+
+.inbox-table th {
+  padding: 12px 20px;
+  color: #5d6e64;
+  background: #f8faf8;
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 720;
+  white-space: nowrap;
+}
+
+.inbox-table td {
+  padding: 14px 20px;
+  color: #2c4034;
+  border-bottom: 1px solid #edf0ed;
+  vertical-align: top;
+}
+
+.inbox-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.inbox-table td strong {
+  display: block;
+  font-size: 12px;
+}
+
+.inbox-reference {
+  display: block;
+  margin-top: 3px;
+  color: #68786e;
+  font-size: 11px;
+}
+
+.inbox-id {
+  color: #4f5f55;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.inbox-table time {
+  white-space: nowrap;
+}
+
+.report-status[data-status='En revisión'] {
+  color: #7a5a12;
+  background: #fff6dd;
+  border-color: #f1e2b2;
+}
+
+.report-status[data-status='En proceso'] {
+  color: #1f4f7a;
+  background: #e8f2fb;
+  border-color: #c9dff3;
+}
+
+.report-status[data-status='Resuelto'] {
+  color: #4a5b50;
+  background: #eef1ee;
+  border-color: #dbe2dc;
+}
+
+@media (max-width: 720px) {
+  .inbox-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .inbox-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .inbox-table tr {
+    display: block;
+    padding: 12px 16px;
+    border-bottom: 1px solid #edf0ed;
+  }
+
+  .inbox-table tbody tr:last-child {
+    border-bottom: 0;
+  }
+
+  .inbox-table td {
+    display: grid;
+    grid-template-columns: 96px 1fr;
+    gap: 10px;
+    padding: 5px 0;
+    border: 0;
+  }
+
+  .inbox-table td::before {
+    content: attr(data-label);
+    color: #68786e;
+    font-size: 11px;
+    font-weight: 700;
+  }
+}
+
+/* HU-10 / RF-19: detalle municipal del caso */
+.inbox-detail-link {
+  color: var(--brand);
+  font-weight: 700;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.inbox-detail-link:hover {
+  text-decoration: underline;
+}
+
+.inbox-detail-link:focus-visible {
+  outline: 3px solid rgb(23 102 79 / 28%);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.history-section {
+  padding: 22px 26px;
+  border-top: 1px solid var(--line);
+}
+
+.history-section h2 {
+  margin: 0 0 14px;
+  font-size: 16px;
+}
+
+.history-list {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.history-list li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.history-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  margin-top: 5px;
+  background: var(--brand);
+  border-radius: 50%;
+}
+
+.history-list strong {
+  display: block;
+  font-size: 13px;
+}
+
+.history-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 5px;
+  color: #68786e;
+  font-size: 12px;
+}

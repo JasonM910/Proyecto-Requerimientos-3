@@ -4,6 +4,8 @@ import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { MAX_PHOTOS, MAX_PHOTO_BYTES, PHOTO_TYPES, photoValidationError } from '../shared/photoRules.js'
+import { REPORT_CATEGORIES as CATEGORY_LIST, REPORT_STATUSES } from '../shared/reportRules.js'
+import { createDemoReports } from './demoData.js'
 
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const DATA_DIR = path.join(ROOT_DIR, 'data')
@@ -20,11 +22,10 @@ const MAX_REQUEST_BYTES = 16 * 1024
 // Tres imágenes de 5 MiB codificadas en base64, más los campos del reporte.
 const MAX_REPORT_REQUEST_BYTES = MAX_PHOTOS * Math.ceil(MAX_PHOTO_BYTES / 3) * 4 + MAX_REQUEST_BYTES
 const DATABASE_VERSION = 2
-const REPORT_CATEGORIES = new Set([
-  'Infraestructura',
-  'Limpieza',
-  'Espacios públicos',
-])
+const REPORT_CATEGORIES = new Set(CATEGORY_LIST)
+const REPORT_STATUS_SET = new Set(REPORT_STATUSES)
+// Los datos ficticios de la bandeja municipal se pueden desactivar con =off.
+const DEMO_DATA_ENABLED = process.env.REPORTE_CIUDADANO_DEMO_DATA !== 'off'
 const PORT = Number(process.env.PORT) || 5173
 const IS_PRODUCTION = process.argv.includes('--production')
 
@@ -174,7 +175,12 @@ async function initializeDatabase() {
     const existing = database.accounts.find(
       (account) => account.email === DEMO_MUNICIPAL_ACCOUNT.email,
     )
-    if (existing && !needsMigration) {
+    const needsDemoReports =
+      DEMO_DATA_ENABLED && !database.reports.some((report) => report.demo === true)
+    if (needsDemoReports) {
+      database.reports.push(...createDemoReports())
+    }
+    if (existing && !needsMigration && !needsDemoReports) {
       return { changed: false }
     }
 
@@ -374,6 +380,70 @@ async function requireCitizen(request) {
   }
 
   return account
+}
+
+async function requireMunicipal(request) {
+  const account = await findCurrentAccount(request)
+  if (!account) {
+    throw new HttpError(401, 'Iniciá sesión para continuar.')
+  }
+  if (account.role !== 'municipal') {
+    throw new HttpError(
+      403,
+      'Esta operación está disponible únicamente para el personal municipal.',
+    )
+  }
+
+  return account
+}
+
+function municipalReportSummary(report) {
+  return {
+    id: report.id,
+    category: report.category,
+    community: report.community,
+    locationReference: report.locationReference,
+    createdAt: report.createdAt,
+    status: report.status,
+  }
+}
+
+// HU-10 / RF-19: detalle para revisión. Nunca incluye citizenId, la clave de
+// idempotencia ni datos de la cuenta que registró el reporte.
+function municipalReportDetail(report) {
+  return {
+    id: report.id,
+    description: report.description,
+    category: report.category,
+    community: report.community,
+    locationReference: report.locationReference,
+    createdAt: report.createdAt,
+    status: report.status,
+    photos: (report.photos ?? []).map((photo) => publicPhoto(report.id, photo)),
+    // Revisión inicial: solo el registro del reporte. El historial completo de
+    // cambios de estado se integra con HU-13.
+    history: [
+      {
+        id: 'created',
+        status: 'Recibido',
+        at: report.createdAt,
+        description: 'Reporte recibido en la plataforma.',
+      },
+    ],
+  }
+}
+
+function readInboxFilter(searchParams, name, validValues, label) {
+  const values = searchParams.getAll(name)
+  if (values.length > 1) {
+    throw new HttpError(400, `Indicá un solo valor para el filtro de ${label}.`)
+  }
+  const value = (values[0] ?? '').trim()
+  if (value && !validValues.has(value)) {
+    throw new HttpError(400, `El filtro de ${label} no es válido.`)
+  }
+
+  return value
 }
 
 async function createSession(account, response) {
@@ -676,7 +746,66 @@ async function handleApiRequest(request, response, pathname) {
     return
   }
 
-  // Solo evidencias: no habilita la bandeja ni el detalle municipal de HU-09/HU-10.
+  // HU-09 / RF-18: bandeja municipal de solo lectura, con filtros opcionales.
+  if (pathname === '/api/municipal/reports' && request.method === 'GET') {
+    await requireMunicipal(request)
+    const { searchParams } = new URL(request.url, 'http://localhost')
+    const category = readInboxFilter(
+      searchParams,
+      'category',
+      REPORT_CATEGORIES,
+      'categoría',
+    )
+    const status = readInboxFilter(searchParams, 'status', REPORT_STATUS_SET, 'estado')
+
+    const result = await updateDatabase((database) => {
+      const matches = database.reports
+        .filter(
+          (report) =>
+            (!category || report.category === category) &&
+            (!status || report.status === status),
+        )
+        .sort(
+          (left, right) =>
+            right.createdAt.localeCompare(left.createdAt) ||
+            right.id.localeCompare(left.id),
+        )
+        .map(municipalReportSummary)
+
+      return {
+        changed: false,
+        value: { reports: matches, total: database.reports.length },
+      }
+    })
+
+    sendJson(response, 200, result)
+    return
+  }
+
+  // HU-10 / RF-19: detalle municipal de un reporte (solo lectura).
+  const municipalDetailMatch = pathname.match(/^\/api\/municipal\/reports\/([^/]+)$/)
+  if (municipalDetailMatch && request.method === 'GET') {
+    await requireMunicipal(request)
+    let reportId
+    try {
+      reportId = decodeURIComponent(municipalDetailMatch[1])
+    } catch {
+      throw new HttpError(404, 'No se encontró ese reporte.')
+    }
+
+    const report = await updateDatabase((database) => ({
+      changed: false,
+      value: database.reports.find((item) => item.id === reportId) ?? null,
+    }))
+    if (!report) {
+      throw new HttpError(404, 'No se encontró ese reporte.')
+    }
+
+    sendJson(response, 200, { report: municipalReportDetail(report) })
+    return
+  }
+
+  // Evidencias: las fotografías las pueden consultar su dueño y el personal municipal.
   const photosMatch = pathname.match(/^\/api\/reports\/([^/]+)\/photos(?:\/([^/]+))?$/)
   if (photosMatch && request.method === 'GET') {
     let reportId

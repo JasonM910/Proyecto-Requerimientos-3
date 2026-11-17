@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import AuthScreen from './components/AuthScreen.jsx'
 import CitizenReports from './components/CitizenReports.jsx'
 import Dashboard from './components/Dashboard.jsx'
+import MunicipalInbox from './components/MunicipalInbox.jsx'
+import MunicipalReportDetail from './components/MunicipalReportDetail.jsx'
 import {
   getCurrentSession,
   registerCitizen,
@@ -17,20 +19,29 @@ const KNOWN_PATHS = new Set([
   '/ciudadano/reportes',
   '/ciudadano/reportes/nuevo',
   '/municipal',
+  '/municipal/reportes',
 ])
 
 function currentPath() {
   return window.location.pathname.replace(/\/+$/, '') || '/'
 }
 
-function getReportId(path) {
-  const match = path.match(/^\/ciudadano\/reportes\/([^/]+)$/)
-  if (!match) {
+const CITIZEN_REPORTS_PATH = '/ciudadano/reportes'
+const MUNICIPAL_REPORTS_PATH = '/municipal/reportes'
+
+function getReportId(path, base = CITIZEN_REPORTS_PATH) {
+  const prefix = `${base}/`
+  if (!path.startsWith(prefix)) {
+    return null
+  }
+
+  const rest = path.slice(prefix.length)
+  if (!rest || rest.includes('/')) {
     return null
   }
 
   try {
-    return decodeURIComponent(match[1])
+    return decodeURIComponent(rest)
   } catch {
     return null
   }
@@ -57,7 +68,9 @@ function resolvePath(path, session) {
     return '/municipal'
   }
 
-  return KNOWN_PATHS.has(path) || getReportId(path) !== null
+  return KNOWN_PATHS.has(path) ||
+    getReportId(path) !== null ||
+    getReportId(path, MUNICIPAL_REPORTS_PATH) !== null
     ? path
     : session
       ? homeForRole(session.role)
@@ -187,6 +200,29 @@ export default function App() {
             ? 'Tu cuenta ciudadana no tiene permiso para acceder a la vista municipal.'
             : notice
         }
+        onNavigate={navigate}
+        onSignOut={handleSignOut}
+      />
+    )
+  }
+
+  const municipalReportId = getReportId(effectivePath, MUNICIPAL_REPORTS_PATH)
+  if (municipalReportId !== null) {
+    return (
+      <MunicipalReportDetail
+        key={municipalReportId}
+        reportId={municipalReportId}
+        user={session}
+        onNavigate={navigate}
+        onSignOut={handleSignOut}
+      />
+    )
+  }
+
+  if (effectivePath === MUNICIPAL_REPORTS_PATH) {
+    return (
+      <MunicipalInbox
+        user={session}
         onNavigate={navigate}
         onSignOut={handleSignOut}
       />

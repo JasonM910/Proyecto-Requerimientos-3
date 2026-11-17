@@ -59,3 +59,19 @@ export async function getCitizenReport(reportId) {
   const result = await request(`/api/reports/${encodeURIComponent(reportId)}`)
   return result.report
 }
+
+export async function getMunicipalReports({ category = '', status = '' } = {}) {
+  const params = new URLSearchParams()
+  if (category) params.set('category', category)
+  if (status) params.set('status', status)
+  const query = params.toString()
+
+  return request(`/api/municipal/reports${query ? `?${query}` : ''}`)
+}
+
+export async function getMunicipalReport(reportId) {
+  const result = await request(
+    `/api/municipal/reports/${encodeURIComponent(reportId)}`,
+  )
+  return result.report
+}

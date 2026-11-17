@@ -59,7 +59,26 @@ export function AppHeader({ user, onNavigate, onSignOut }) {
             </a>
           </>
         ) : (
-          <span className="nav-role">Espacio municipal</span>
+          <>
+            <a
+              href="/municipal"
+              onClick={(event) => {
+                event.preventDefault()
+                onNavigate('/municipal')
+              }}
+            >
+              Inicio
+            </a>
+            <a
+              href="/municipal/reportes"
+              onClick={(event) => {
+                event.preventDefault()
+                onNavigate('/municipal/reportes')
+              }}
+            >
+              Bandeja de reportes
+            </a>
+          </>
         )}
       </nav>
 
@@ -160,7 +179,7 @@ function CitizenHome({ user, onNavigate }) {
   )
 }
 
-function MunicipalHome() {
+function MunicipalHome({ onNavigate }) {
   return (
     <>
       <section className="municipal-banner">
@@ -195,13 +214,20 @@ function MunicipalHome() {
             />
           </svg>
         </span>
-        <span className="eyebrow">Preparado para el siguiente incremento</span>
-        <h2 id="municipal-ready">La gestión municipal se integrará aquí</h2>
+        <span className="eyebrow">Gestión municipal</span>
+        <h2 id="municipal-ready">Bandeja de reportes</h2>
         <p>
-          Esta vista ya valida el rol y protege el acceso. La bandeja de
-          reportes, su clasificación y los cambios de estado quedan fuera de
-          este incremento.
+          Consultá los reportes de la municipalidad de demostración y filtralos
+          por categoría o estado. La clasificación y los cambios de estado
+          quedan para los siguientes incrementos.
         </p>
+        <button
+          className="button button-primary"
+          type="button"
+          onClick={() => onNavigate('/municipal/reportes')}
+        >
+          Abrir la bandeja <span aria-hidden="true">→</span>
+        </button>
       </section>
     </>
   )
@@ -227,7 +253,7 @@ export default function Dashboard({
         {isCitizen ? (
           <CitizenHome user={user} onNavigate={onNavigate} />
         ) : (
-          <MunicipalHome />
+          <MunicipalHome onNavigate={onNavigate} />
         )}
       </main>
       <footer className="app-footer">

@@ -120,6 +120,7 @@ async function startTestServer() {
       ...process.env,
       PORT: String(port),
       REPORTE_CIUDADANO_DATABASE_PATH: DATABASE_PATH,
+      REPORTE_CIUDADANO_DEMO_DATA: 'off',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
