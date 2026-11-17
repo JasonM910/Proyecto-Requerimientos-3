@@ -171,7 +171,9 @@ test('HU-11 confirma categoría, sincroniza filtros y detalle ciudadano, y conse
   const newFilter = await municipal.request('/api/municipal/reports?category=Limpieza&status=Recibido')
   assert.ok(newFilter.body.reports.some((item) => item.id === report.id))
   assert.deepEqual((await owner.request(`/api/reports/${report.id}/status-events`)).body.events, [])
-  assert.deepEqual((await owner.request('/api/notifications')).body.notifications, [])
+  const notices = (await owner.request('/api/notifications')).body.notifications
+  assert.equal(notices.length, 1)
+  assert.equal(notices[0].type, 'received')
 })
 
 test('HU-11/HU-12 validan categorías, estados, campos y permisos en el servidor', async () => {
@@ -216,7 +218,7 @@ test('HU-12 cada estado efectivo genera exactamente un evento y aviso dirigidos 
   assert.deepEqual(preserved, original)
   assert.equal(statusEvents.length, 4)
   assert.equal(municipalOperations.length, 4)
-  const notices = (await owner.request('/api/notifications')).body.notifications
+  const notices = (await owner.request('/api/notifications')).body.notifications.filter((notice) => notice.type === 'status-change')
   assert.equal(notices.length, 4)
   statusEvents.forEach((event, index) => {
     assert.equal(event.reportId, report.id)
@@ -231,7 +233,9 @@ test('HU-12 cada estado efectivo genera exactamente un evento y aviso dirigidos 
     assert.equal(notice.url, `/ciudadano/reportes/${report.id}`)
     assert.ok(notices.some((item) => item.id === notice.id && !('citizenId' in item)))
   })
-  assert.deepEqual((await other.owner.request(`/api/notifications?citizenId=${accountId}`)).body.notifications, [])
+  const otherNotices = (await other.owner.request(`/api/notifications?citizenId=${accountId}`)).body.notifications
+  assert.equal(otherNotices.length, 1)
+  assert.ok(otherNotices.every((notice) => notice.reportId === other.report.id))
   assert.equal((await other.owner.request(`/api/reports/${report.id}/status-events`)).status, 404)
   assert.equal((await client().request('/api/notifications')).status, 401)
   assert.equal((await municipal.request('/api/notifications')).status, 403)
@@ -263,7 +267,7 @@ test('HU-11/HU-12 los envíos concurrentes y los reintentos tardíos son idempot
   assert.equal(replay.body.report.status, 'En proceso', 'un reintento tardío no revierte un cambio posterior')
   assert.equal((await update(report.id, 'status', 'Resuelto', 'En proceso', { key })).status, 409)
   assert.equal((await owner.request(`/api/reports/${report.id}/status-events`)).body.events.length, 2)
-  assert.equal((await owner.request('/api/notifications')).body.notifications.length, 2)
+  assert.equal((await owner.request('/api/notifications')).body.notifications.filter((notice) => notice.type === 'status-change').length, 2)
   const categoryKey = 'concurrent-category-key-0001'
   const categories = await Promise.all(Array.from({ length: 3 }, () => update(report.id, 'category', 'Limpieza', 'Infraestructura', { key: categoryKey })))
   assert.equal(categories.filter((response) => response.body.changed).length, 1)
@@ -277,7 +281,7 @@ test('HU-12 confirma actualización y aviso dentro de dos segundos en la base de
   const response = await update(report.id, 'status', 'En revisión', 'Recibido')
   assert.equal(response.status, 200)
   const notifications = await owner.request('/api/notifications')
-  assert.equal(notifications.body.notifications.length, 1)
+  assert.equal(notifications.body.notifications.filter((notice) => notice.type === 'status-change').length, 1)
   assert.equal((await owner.request(`/api/reports/${report.id}`)).body.report.status, 'En revisión')
   const elapsed = performance.now() - start
   context.diagnostic(`Cambio confirmado, aviso y consulta ciudadana disponibles en ${elapsed.toFixed(1)} ms`)
@@ -300,7 +304,7 @@ test('HU-11/HU-12 un fallo al reemplazar el archivo revierte todos los datos y p
     }
     assert.equal((await update(report.id, field, value, report[field], { key })).status, 200)
   }
-  assert.equal((await owner.request('/api/notifications')).body.notifications.length, 1)
+  assert.equal((await owner.request('/api/notifications')).body.notifications.filter((notice) => notice.type === 'status-change').length, 1)
   assert.equal((await owner.request(`/api/reports/${report.id}/status-events`)).body.events.length, 1)
 })
 
@@ -318,7 +322,7 @@ test('HU-11/HU-12 conserva cambios, eventos, avisos y evidencias tras reiniciar 
   assert.equal(detail.body.report.category, 'Espacios públicos')
   assert.equal(detail.body.report.status, 'Resuelto')
   assert.deepEqual(detail.body.report.photos, report.photos)
-  assert.equal((await reentered.request('/api/notifications')).body.notifications.length, 1)
+  assert.equal((await reentered.request('/api/notifications')).body.notifications.filter((notice) => notice.type === 'status-change').length, 1)
   assert.equal((await reentered.request(`/api/reports/${report.id}/status-events`)).body.events.length, 1)
   const stored = await database()
   assert.deepEqual(stored.reports, original.reports)

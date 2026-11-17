@@ -199,7 +199,22 @@ async function initializeDatabase() {
         needsDemoHistory = true
       }
     }
-    if (existing && !needsMigration && !needsDemoReports && !needsDemoHistory) {
+    // HU-14: completa solo recepciones de reportes con un autor ciudadano real.
+    // No modifica los reportes ni los avisos de cambios de estado existentes.
+    const citizens = new Set(database.accounts.filter((account) => account.role === 'citizen').map((account) => account.id))
+    const receipts = new Set(database.notifications
+      .filter((notification) => notification.eventId === 'created')
+      .map((notification) => JSON.stringify([notification.citizenId, notification.reportId])))
+    let needsReceipts = false
+    for (const report of database.reports) {
+      const receiptKey = JSON.stringify([report.citizenId, report.id])
+      if (citizens.has(report.citizenId) && !receipts.has(receiptKey)) {
+        database.notifications.push(receiptNotification(report))
+        receipts.add(receiptKey)
+        needsReceipts = true
+      }
+    }
+    if (existing && !needsMigration && !needsDemoReports && !needsDemoHistory && !needsReceipts) {
       return { changed: false }
     }
 
@@ -296,6 +311,32 @@ function publicAccount(account) {
     name: account.name,
     email: account.email,
     role: account.role,
+  }
+}
+
+function receiptNotification(report) {
+  return {
+    id: randomBytes(16).toString('hex'),
+    citizenId: report.citizenId,
+    reportId: report.id,
+    eventId: 'created',
+    newStatus: 'Recibido',
+    createdAt: report.createdAt,
+    url: `/ciudadano/reportes/${encodeURIComponent(report.id)}`,
+    readAt: null,
+  }
+}
+
+function publicNotification(notification) {
+  return {
+    id: notification.id,
+    reportId: notification.reportId,
+    eventId: notification.eventId,
+    type: notification.eventId === 'created' ? 'received' : 'status-change',
+    newStatus: notification.newStatus,
+    createdAt: notification.createdAt,
+    url: `/ciudadano/reportes/${encodeURIComponent(notification.reportId)}`,
+    readAt: notification.readAt ?? null,
   }
 }
 
@@ -806,6 +847,7 @@ async function handleApiRequest(request, response, pathname) {
         photos,
       }
       database.reports.push(report)
+      database.notifications.push(receiptNotification(report))
 
       return {
         changed: true,
@@ -929,23 +971,37 @@ async function handleApiRequest(request, response, pathname) {
     return
   }
 
-  // Mecanismos para HU-13/HU-14, sin implementar sus pantallas.
+  // HU-14: lectura persistente y exclusiva del propietario, sin tocar el reporte.
+  const notificationReadMatch = pathname.match(/^\/api\/notifications\/([^/]+)\/read$/)
+  if (notificationReadMatch && request.method === 'PATCH') {
+    const account = await requireCitizen(request)
+    let notificationId
+    try {
+      notificationId = decodeURIComponent(notificationReadMatch[1])
+    } catch {
+      throw new HttpError(404, 'No se encontró ese aviso.')
+    }
+    const notification = await updateDatabase((database) => {
+      const item = database.notifications.find((entry) => entry.id === notificationId && entry.citizenId === account.id)
+      if (!item) throw new HttpError(404, 'No se encontró ese aviso.')
+      if (item.readAt) return { changed: false, value: publicNotification(item) }
+      item.readAt = new Date().toISOString()
+      return { changed: true, value: publicNotification(item) }
+    })
+    sendJson(response, 200, { notification })
+    return
+  }
+
   if (pathname === '/api/notifications' && request.method === 'GET') {
     const account = await requireCitizen(request)
     const notifications = await updateDatabase((database) => ({
       changed: false,
       value: database.notifications
         .filter((notification) => notification.citizenId === account.id)
-        .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
-        .map((notification) => ({
-          id: notification.id,
-          reportId: notification.reportId,
-          eventId: notification.eventId,
-          newStatus: notification.newStatus,
-          createdAt: notification.createdAt,
-          url: notification.url,
-          readAt: notification.readAt,
-        })),
+        .reverse()
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt) ||
+          Number(left.eventId === 'created') - Number(right.eventId === 'created'))
+        .map(publicNotification),
     }))
     sendJson(response, 200, { notifications })
     return

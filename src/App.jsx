@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import AuthScreen from './components/AuthScreen.jsx'
 import CitizenReports from './components/CitizenReports.jsx'
+import CitizenNotifications from './components/CitizenNotifications.jsx'
 import Dashboard from './components/Dashboard.jsx'
 import MunicipalInbox from './components/MunicipalInbox.jsx'
 import MunicipalReportDetail from './components/MunicipalReportDetail.jsx'
@@ -18,6 +19,7 @@ const KNOWN_PATHS = new Set([
   '/ciudadano',
   '/ciudadano/reportes',
   '/ciudadano/reportes/nuevo',
+  '/ciudadano/notificaciones',
   '/municipal',
   '/municipal/reportes',
 ])
@@ -207,6 +209,10 @@ export default function App() {
         onSignOut={handleSignOut}
       />
     )
+  }
+
+  if (effectivePath === '/ciudadano/notificaciones') {
+    return <CitizenNotifications key={session.id} user={session} onNavigate={navigate} onSignOut={handleSignOut} />
   }
 
   const municipalReportId = getReportId(effectivePath, MUNICIPAL_REPORTS_PATH)

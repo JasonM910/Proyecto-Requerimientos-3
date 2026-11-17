@@ -1,9 +1,9 @@
 # Reporte Ciudadano
 
 Prototipo evolutivo del curso de Requerimientos de Software del Tecnológico de
-Costa Rica. Incluye HU-01 a HU-10 y el incremento del Sprint 3 correspondiente
-a HU-11 y HU-12: corrección de clasificación, actualización de estado y
-generación de avisos internos.
+Costa Rica. Incluye HU-01 a HU-14: reportes con evidencias, gestión municipal,
+historial de estados y bandeja de notificaciones ciudadanas. El incremento
+HU-14 completa los avisos internos de recepción y su lectura persistente.
 
 ## Requisitos y ejecución
 
@@ -72,6 +72,15 @@ npm run start
   guarda un evento y un aviso interno para el autor, en la misma escritura
   atómica que actualiza el reporte. Guardar el valor actual no escribe datos.
   Los controles y la API impiden duplicados por clics repetidos o reintentos.
+- **HU-13 — Historial de estados:** los detalles ciudadano y municipal
+  reutilizan `StatusHistory.jsx` para mostrar el registro inicial y los cambios
+  confirmados, con fecha, estado anterior y nuevo.
+- **HU-14 — Mis notificaciones (SCRUM-21 / RF-17):** muestra recepción y cambios
+  de estado, del más reciente al más antiguo, exclusivamente para la cuenta
+  ciudadana en sesión. Cada aviso identifica el caso, su fecha y estado y abre
+  el detalle después de guardar su lectura. Distingue «Leída» y «No leída» con
+  texto, símbolos y color, e informa cuando la bandeja está vacía o falla una
+  operación. La lectura persiste al recargar y volver a ingresar.
 
 ### Acceso municipal de demostración
 
@@ -132,11 +141,25 @@ Cada reporte puede contener dos colecciones adicionales:
   evitando que una respuesta de red perdida termine revirtiendo otra operación.
 
 La colección raíz `notifications` contiene `id`, `citizenId`, `reportId`,
-`eventId`, `newStatus`, `createdAt`, `url` y `readAt: null`. El destinatario
+`eventId`, `newStatus`, `createdAt`, `url` y `readAt`. El destinatario
 siempre proviene del autor almacenado del reporte; la petición no puede elegirlo.
 El evento y el aviso comparten fecha y están vinculados por `eventId`. Los casos
 ficticios de HU-09 pertenecen a `demo-seed`: sus avisos se vinculan a ese autor
 ficticio y no aparecen en cuentas ciudadanas reales.
+
+HU-14 guarda la recepción junto con el reporte nuevo, en la misma operación
+atómica y bajo su clave de idempotencia. Ese aviso usa `eventId: "created"`,
+`newStatus: "Recibido"` y la fecha de creación del reporte; su evento corresponde
+al registro inicial que HU-13 muestra en el historial. Los avisos de cambio de
+estado de HU-12 conservan el identificador de su evento y sus datos originales.
+
+Al iniciar, el servidor completa una recepción faltante por cada reporte cuyo
+autor tenga una cuenta ciudadana existente. La migración es idempotente, usa
+la fecha original y no modifica reportes ni avisos anteriores. No crea
+recepciones para los casos ficticios sin cuenta. La base permanece en versión 3.
+Las notificaciones nuevas tienen `readAt: null`; al abrirlas, el servidor
+establece una única fecha ISO de lectura. Una segunda apertura conserva esa
+fecha y no vuelve a escribir el archivo ni genera avisos o eventos adicionales.
 
 El servidor serializa las escrituras y reemplaza el JSON completo mediante un
 archivo temporal. Si el guardado falla, descarta esa modificación y elimina el
@@ -151,6 +174,9 @@ como en el entorno de demostración del proyecto.
 - `/ciudadano/reportes/nuevo`: formulario de reportes y selección de fotografías.
 - `/ciudadano/reportes`: listado de reportes propios.
 - `/ciudadano/reportes/:id`: detalle ciudadano con evidencias.
+- `/ciudadano/notificaciones`: bandeja privada accesible desde «Mis
+  notificaciones» en el menú ciudadano, también disponible para volver desde
+  el detalle de un caso. La sesión municipal no puede acceder a esta ruta.
 - `/municipal`: vista inicial municipal protegida por rol.
 - `/municipal/reportes`: bandeja existente con filtros por categoría y estado.
 - `/municipal/reportes/:id`: detalle municipal con controles de gestión.
@@ -198,19 +224,29 @@ consultar el caso antes de permitir otra edición. La misma clave y el mismo
 valor repiten la respuesta sin guardar de nuevo; reutilizarla para otro valor
 se rechaza. Una cuenta ciudadana recibe 403 aunque manipule la petición.
 
-Para integrar posteriormente HU-13 y HU-14 quedan preparados:
+Las funciones de historial y notificaciones utilizan:
 
 - `GET /api/reports/:id/status-events`: eventos del caso, accesibles únicamente
   al propietario o al personal municipal.
 - `GET /api/notifications`: avisos exclusivos de la cuenta ciudadana en sesión,
   del más reciente al más antiguo, sin aceptar un destinatario de la petición.
-- `getReportStatusEvents()` y `getCitizenNotifications()` en
-  `src/services/reportService.js`.
+  Cada elemento público añade `type: "received"` o `"status-change"` a los
+  datos del aviso; no expone `citizenId`. Si dos avisos comparten fecha exacta,
+  los cambios preceden a la recepción y los últimos cambios se muestran primero.
+- `PATCH /api/notifications/:id/read`: sin cuerpo requerido. Verifica sesión
+  ciudadana y propiedad y guarda `readAt` usando la hora del servidor; responde
+  `{ notification }`. No utiliza fechas o destinatarios enviados por el cliente.
+  Una solicitud sin sesión recibe 401, un rol municipal 403 y un identificador
+  inexistente o ajeno 404. Los errores de guardado no alteran la notificación.
+- `getReportStatusEvents()`, `getCitizenNotifications()` y
+  `markNotificationRead()` en `src/services/reportService.js`.
 
-La propiedad `url` de cada aviso abre el detalle ciudadano existente. Este
-incremento conserva la vista de registro inicial de HU-10; no añade la interfaz
-completa de historial, la bandeja de notificaciones ni marcado de avisos leídos.
-Tampoco envía correos ni usa servicios externos.
+`CitizenNotifications.jsx` reutiliza `AppHeader`, los estilos de reportes y las
+insignias de estado. La propiedad `url` abre el detalle ciudadano existente,
+con su historial de HU-13 y sus fotografías. La interfaz espera la confirmación
+del guardado antes de navegar; si falla, conserva el aviso y permite reintentar.
+Un bloqueo evita solicitudes simultáneas por clics repetidos. No se envían
+correos ni se usan servicios externos.
 
 ## Pruebas automatizadas
 
@@ -236,6 +272,18 @@ Mide que el cambio, el aviso y su consulta estén disponibles en menos de dos
 segundos en la base temporal de demostración; no es una garantía de rendimiento
 para volúmenes o servidores distintos.
 
+`tests/status-history.test.js` verifica HU-13. `tests/notifications.test.js`
+verifica HU-14: recepción inicial atómica e idempotente, avisos coherentes con
+el historial, orden, privacidad entre cuentas, roles, lectura repetida y
+concurrente, persistencia tras reiniciar, migración sin duplicados y fallos
+de almacenamiento tanto al registrar un reporte como al guardar su lectura.
+También mide listado de 100 avisos, lectura y consulta de su reporte dentro de
+dos segundos en la base temporal local. Las comprobaciones del navegador
+cubren apertura con teclado, doble clic, recuperación de errores de carga y
+lectura, reingreso, evidencias e historial, y ausencia de desbordamiento a
+320, 390, 768, 1024 y 1366 píxeles de ancho. No sustituyen una evaluación formal
+de usabilidad con participantes del Sprint 4.
+
 Para revisar la interfaz manualmente, iniciá sesión, completá el formulario y
 agregá las tres imágenes de `tests/fixtures/` una a una. Intentá agregar una
 cuarta, un archivo de texto y una imagen de más de 5 MB: los campos y las
@@ -250,8 +298,11 @@ municipal. Filtrá por su categoría y estado y abrí su detalle. Probá cancela
 ambas ediciones y confirmar una categoría diferente. Volvé a la bandeja:
 debe conservar los filtros y excluir el caso si dejó de coincidir. Cambiá sus
 filtros y abrilo otra vez; confirmá un nuevo estado. Volvé a ingresar como
-ciudadano y comprobá categoría, estado y fotografías. Los avisos pueden
-verificarse mediante la API autenticada hasta que HU-14 incorpore su interfaz.
+ciudadano y comprobá categoría, estado y fotografías. En «Mis notificaciones»
+deben aparecer el aviso de recepción y los cambios de estado. Abrí un aviso,
+volvé usando el menú y comprobá su indicación «Leída» después de recargar y
+volver a iniciar sesión. Otra cuenta debe mostrar únicamente sus propios
+avisos; una cuenta sin reportes debe ver el mensaje de bandeja vacía.
 
 ## Alcance y seguridad
 

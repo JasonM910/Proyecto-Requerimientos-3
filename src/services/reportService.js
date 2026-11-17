@@ -93,6 +93,13 @@ export async function getCitizenNotifications() {
   return (await request('/api/notifications')).notifications
 }
 
+export async function markNotificationRead(notificationId) {
+  const result = await request(`/api/notifications/${encodeURIComponent(notificationId)}/read`, {
+    method: 'PATCH',
+  })
+  return result.notification
+}
+
 export async function getReportStatusEvents(reportId) {
   return (await request(`/api/reports/${encodeURIComponent(reportId)}/status-events`)).events
 }

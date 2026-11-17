@@ -57,6 +57,15 @@ export function AppHeader({ user, onNavigate, onSignOut }) {
             >
               Mis reportes
             </a>
+            <a
+              href="/ciudadano/notificaciones"
+              onClick={(event) => {
+                event.preventDefault()
+                onNavigate('/ciudadano/notificaciones')
+              }}
+            >
+              Mis notificaciones
+            </a>
           </>
         ) : (
           <>

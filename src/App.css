@@ -2491,6 +2491,116 @@
   margin-top: 18px;
 }
 
+/* HU-14: avisos internos de la cuenta ciudadana. */
+.notification-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.notification-list > li + li {
+  border-top: 1px solid var(--line);
+}
+
+.notification-item {
+  display: flex;
+  width: 100%;
+  gap: 16px;
+  padding: 22px;
+  color: var(--ink);
+  background: #fff;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.notification-item.is-unread {
+  background: #f3f9f5;
+  box-shadow: inset 3px 0 var(--brand);
+}
+
+.notification-item:hover {
+  background: #eaf3ed;
+}
+
+.notification-item:focus-visible {
+  outline-offset: -4px;
+}
+
+.notification-symbol {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  place-items: center;
+  color: var(--brand);
+  background: #e3efe6;
+  border-radius: 10px;
+}
+
+.notification-copy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 10px;
+}
+
+.notification-heading,
+.notification-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+
+.notification-heading {
+  justify-content: space-between;
+}
+
+.notification-heading strong {
+  font-size: 14px;
+}
+
+.notification-reading {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.is-unread .notification-reading {
+  color: var(--brand);
+  font-weight: 700;
+}
+
+.notification-report-id {
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.notification-meta time {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.notification-action {
+  margin-top: 2px;
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+@media (max-width: 520px) {
+  .notification-item {
+    gap: 10px;
+    padding: 18px 14px;
+  }
+
+  .notifications-section .report-list-caption {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
 /* HU-13 / RF-14: historial de estados compartido por ambos detalles. */
 .visually-hidden {
   position: absolute;
