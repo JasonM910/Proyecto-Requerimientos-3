@@ -28,11 +28,13 @@ async function request(path, options = {}) {
   }
 
   if (!response.ok) {
-    throw new Error(
+    const error = new Error(
       typeof result.error === 'string'
         ? result.error
         : 'No se pudo completar la solicitud. Intentá nuevamente.',
     )
+    error.status = response.status
+    throw error
   }
 
   return result
@@ -74,4 +76,23 @@ export async function getMunicipalReport(reportId) {
     `/api/municipal/reports/${encodeURIComponent(reportId)}`,
   )
   return result.report
+}
+
+export async function updateMunicipalReport(reportId, field, value, expectedValue, key) {
+  return request(`/api/municipal/reports/${encodeURIComponent(reportId)}/${field}`, {
+    method: 'PATCH',
+    headers: { 'Idempotency-Key': key },
+    body: JSON.stringify({
+      [field]: value,
+      [field === 'category' ? 'expectedCategory' : 'expectedStatus']: expectedValue,
+    }),
+  })
+}
+
+export async function getCitizenNotifications() {
+  return (await request('/api/notifications')).notifications
+}
+
+export async function getReportStatusEvents(reportId) {
+  return (await request(`/api/reports/${encodeURIComponent(reportId)}/status-events`)).events
 }

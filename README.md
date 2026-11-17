@@ -1,8 +1,9 @@
 # Reporte Ciudadano
 
 Prototipo evolutivo del curso de Requerimientos de Software del Tecnológico de
-Costa Rica. Incluye las seis historias del Sprint 1 y las historias HU-07 y
-HU-08 del Sprint 2: selección, revisión y consulta de evidencias fotográficas.
+Costa Rica. Incluye HU-01 a HU-10 y el incremento del Sprint 3 correspondiente
+a HU-11 y HU-12: corrección de clasificación, actualización de estado y
+generación de avisos internos.
 
 ## Requisitos y ejecución
 
@@ -57,6 +58,20 @@ npm run start
   en el detalle ciudadano. Se pueden abrir completas con teclado. Los casos
   anteriores o sin fotografías muestran un mensaje explícito. Solo el dueño o
   una sesión municipal pueden descargar las evidencias.
+- **HU-09 — Bandeja municipal:** lista los casos y permite filtrarlos por
+  categoría y estado. Incluye doce casos ficticios de demostración; se pueden
+  desactivar al iniciar con `REPORTE_CIUDADANO_DEMO_DATA=off`.
+- **HU-10 — Detalle municipal:** muestra descripción, ubicación, evidencias,
+  categoría, fecha, estado y registro inicial, con acceso restringido por rol.
+- **HU-11 — Corregir clasificación (SCRUM-18 / RF-20):** permite elegir una de
+  las tres categorías desde el detalle y confirmar o cancelar. El guardado
+  conserva todos los demás datos. Al volver a la bandeja se conservan los
+  filtros activos y se consultan los resultados actualizados.
+- **HU-12 — Actualizar estado y avisar (SCRUM-19 / RF-21 y RF-16):** permite
+  confirmar o cancelar cualquiera de los cuatro estados. Cada cambio efectivo
+  guarda un evento y un aviso interno para el autor, en la misma escritura
+  atómica que actualiza el reporte. Guardar el valor actual no escribe datos.
+  Los controles y la API impiden duplicados por clics repetidos o reintentos.
 
 ### Acceso municipal de demostración
 
@@ -77,10 +92,11 @@ esta estructura:
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "accounts": [],
   "sessions": [],
-  "reports": []
+  "reports": [],
+  "notifications": []
 }
 ```
 
@@ -96,15 +112,37 @@ Opcionalmente contienen `photos`: una lista de objetos con `id`, `name`,
 dentro del reporte, sin archivos huérfanos ni URLs temporales. El guardado
 atómico y la clave de idempotencia existentes evitan duplicados por reintentos
 o solicitudes concurrentes. El navegador también impide envíos simultáneos.
-`server/index.js` migra automáticamente la base previa de versión 1 a versión
-2, preservando cuentas y sesiones y agregando la colección de reportes. La API
+`server/index.js` migra automáticamente las bases de versión 1 y 2 a versión
+3, preservando cuentas, sesiones y reportes y agregando las notificaciones. La API
 lee y actualiza el archivo para todas las operaciones.
 
-Las fotografías son una ampliación compatible de la versión 2: los reportes
+Las fotografías siguen siendo compatibles con la versión 2: los reportes
 anteriores que no tienen `photos` se interpretan como reportes sin evidencias.
 No se usa localStorage ni IndexedDB; la persistencia depende del mismo servidor
 y archivo JSON que ya utiliza el proyecto. Cerrar sesión, recargar o reiniciar
 el servidor conserva los bytes de las imágenes.
+
+Cada reporte puede contener dos colecciones adicionales:
+
+- `statusEvents`: eventos con `id`, `reportId`, `previousStatus`, `newStatus`
+  y `createdAt` (fecha ISO con hora). Los reportes anteriores se interpretan
+  como una lista vacía; no se inventan cambios históricos.
+- `municipalOperations`: comprobantes internos con `key`, `accountId`, `field`
+  y `value`. Permiten reconocer un reintento incluso si hubo cambios posteriores,
+  evitando que una respuesta de red perdida termine revirtiendo otra operación.
+
+La colección raíz `notifications` contiene `id`, `citizenId`, `reportId`,
+`eventId`, `newStatus`, `createdAt`, `url` y `readAt: null`. El destinatario
+siempre proviene del autor almacenado del reporte; la petición no puede elegirlo.
+El evento y el aviso comparten fecha y están vinculados por `eventId`. Los casos
+ficticios de HU-09 pertenecen a `demo-seed`: sus avisos se vinculan a ese autor
+ficticio y no aparecen en cuentas ciudadanas reales.
+
+El servidor serializa las escrituras y reemplaza el JSON completo mediante un
+archivo temporal. Si el guardado falla, descarta esa modificación y elimina el
+temporal: el reporte, el evento, el aviso y el comprobante se guardan juntos o
+no se guarda ninguno. Esta garantía supone una única instancia del servidor,
+como en el entorno de demostración del proyecto.
 
 ## Rutas y puntos de integración
 
@@ -114,6 +152,8 @@ el servidor conserva los bytes de las imágenes.
 - `/ciudadano/reportes`: listado de reportes propios.
 - `/ciudadano/reportes/:id`: detalle ciudadano con evidencias.
 - `/municipal`: vista inicial municipal protegida por rol.
+- `/municipal/reportes`: bandeja existente con filtros por categoría y estado.
+- `/municipal/reportes/:id`: detalle municipal con controles de gestión.
 
 `server/index.js` expone la API local bajo `/api/auth/*` y `/api/reports`;
 `src/services/authService.js` y `src/services/reportService.js` consumen esa
@@ -136,11 +176,41 @@ sus archivos temporales, incluso por las rutas `/@fs` y las importaciones
 `shared/photoRules.js` comparte los límites de tipo y tamaño con el servidor.
 `src/components/EvidenceGallery.jsx` recibe la propiedad `photos` y puede
 reutilizarse en el futuro detalle municipal con los metadatos de la ruta de
-evidencias. Este incremento no implementa HU-09 ni HU-10.
+evidencias; HU-10 lo reutiliza en su detalle municipal.
 
-Los cuatro estados se explican en la interfaz. En este sprint solo se asigna
-`Recibido`; `En revisión`, `En proceso` y `Resuelto` son etapas informativas
-para entregas posteriores.
+`MunicipalReportActions.jsx` añade los controles a `MunicipalReportDetail.jsx`;
+reutiliza las categorías y estados de `shared/reportRules.js`. La ciudadanía
+consulta los valores actualizados desde los mismos reportes, sin copias de datos.
+Los cuatro estados incluyen texto y las insignias de colores existentes.
+
+La API municipal conserva las rutas de HU-09/HU-10 y añade:
+
+- `PATCH /api/municipal/reports/:id/category`: JSON con `category` y
+  `expectedCategory` (valor original mostrado).
+- `PATCH /api/municipal/reports/:id/status`: JSON con `status` y
+  `expectedStatus`.
+
+Ambas requieren sesión municipal e `Idempotency-Key` (de 16 a 100 caracteres
+alfanuméricos, guion o guion bajo). Solo admiten los campos indicados y los
+valores compartidos. Responden con `{ report, changed, repeated }`. Si otro
+guardado modificó el valor original, responden 409 y la interfaz vuelve a
+consultar el caso antes de permitir otra edición. La misma clave y el mismo
+valor repiten la respuesta sin guardar de nuevo; reutilizarla para otro valor
+se rechaza. Una cuenta ciudadana recibe 403 aunque manipule la petición.
+
+Para integrar posteriormente HU-13 y HU-14 quedan preparados:
+
+- `GET /api/reports/:id/status-events`: eventos del caso, accesibles únicamente
+  al propietario o al personal municipal.
+- `GET /api/notifications`: avisos exclusivos de la cuenta ciudadana en sesión,
+  del más reciente al más antiguo, sin aceptar un destinatario de la petición.
+- `getReportStatusEvents()` y `getCitizenNotifications()` en
+  `src/services/reportService.js`.
+
+La propiedad `url` de cada aviso abre el detalle ciudadano existente. Este
+incremento conserva la vista de registro inicial de HU-10; no añade la interfaz
+completa de historial, la bandeja de notificaciones ni marcado de avisos leídos.
+Tampoco envía correos ni usa servicios externos.
 
 ## Pruebas automatizadas
 
@@ -155,6 +225,17 @@ persistencia después de cerrar sesión y reiniciar el servidor. También
 comprueba que Vite no exponga la base privada. Usa imágenes pequeñas en
 `tests/fixtures/`. La base temporal se elimina al finalizar la ejecución.
 
+`tests/municipal-inbox.test.js` verifica las integraciones de HU-09 y HU-10.
+`tests/municipal-updates.test.js` comprueba migración desde versión 2, permisos,
+validaciones, sincronización de filtros y consulta ciudadana, conservación de
+autor y fotografías, los cuatro estados, avisos separados por cuenta, envíos
+concurrentes, reintentos tardíos, ausencia de cambios al guardar el mismo valor
+y persistencia al reiniciar. También simula un fallo de reemplazo del JSON en
+el proceso de prueba y verifica que no queden datos parciales ni temporales.
+Mide que el cambio, el aviso y su consulta estén disponibles en menos de dos
+segundos en la base temporal de demostración; no es una garantía de rendimiento
+para volúmenes o servidores distintos.
+
 Para revisar la interfaz manualmente, iniciá sesión, completá el formulario y
 agregá las tres imágenes de `tests/fixtures/` una a una. Intentá agregar una
 cuarta, un archivo de texto y una imagen de más de 5 MB: los campos y las
@@ -163,6 +244,14 @@ enviá. Consultá el detalle desde la confirmación y desde Mis reportes, recarg
 y volvé a iniciar sesión. Finalmente, retiralas todas y enviá otro reporte:
 debe indicar que no tiene fotografías adjuntas. Otra cuenta ciudadana no debe
 poder consultar el reporte ni las URLs de sus fotografías.
+
+Para HU-11/HU-12, creá un caso con una cuenta ciudadana y luego ingresá como
+municipal. Filtrá por su categoría y estado y abrí su detalle. Probá cancelar
+ambas ediciones y confirmar una categoría diferente. Volvé a la bandeja:
+debe conservar los filtros y excluir el caso si dejó de coincidir. Cambiá sus
+filtros y abrilo otra vez; confirmá un nuevo estado. Volvé a ingresar como
+ciudadano y comprobá categoría, estado y fotografías. Los avisos pueden
+verificarse mediante la API autenticada hasta que HU-14 incorpore su interfaz.
 
 ## Alcance y seguridad
 

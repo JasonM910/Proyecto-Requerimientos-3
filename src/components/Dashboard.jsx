@@ -218,8 +218,8 @@ function MunicipalHome({ onNavigate }) {
         <h2 id="municipal-ready">Bandeja de reportes</h2>
         <p>
           Consultá los reportes de la municipalidad de demostración y filtralos
-          por categoría o estado. La clasificación y los cambios de estado
-          quedan para los siguientes incrementos.
+          por categoría o estado. Abrí un caso para revisar sus evidencias,
+          corregir la categoría o actualizar su estado.
         </p>
         <button
           className="button button-primary"

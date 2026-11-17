@@ -2,19 +2,17 @@ import { useEffect, useRef, useState } from 'react'
 import { AppHeader } from './Dashboard.jsx'
 import PhotoPicker from './PhotoPicker.jsx'
 import EvidenceGallery from './EvidenceGallery.jsx'
+import { REPORT_CATEGORIES as CATEGORIES } from '../../shared/reportRules.js'
 import {
   createCitizenReport,
   getCitizenReport,
   getCitizenReports,
 } from '../services/reportService.js'
 
-const CATEGORIES = ['Infraestructura', 'Limpieza', 'Espacios públicos']
-
 const STATUS_GUIDE = [
   {
     status: 'Recibido',
     description: 'La municipalidad recibió el reporte.',
-    available: true,
   },
   {
     status: 'En revisión',
@@ -83,23 +81,23 @@ function StatusGuide() {
         <h2 id="status-guide-title">Estados del reporte</h2>
       </div>
       <p className="status-guide-note">
-        Tus reportes iniciarán en <strong>Recibido</strong>. Los demás estados
-        son etapas informativas; todavía no se actualizan en este sprint.
+        Tus reportes iniciarán en <strong>Recibido</strong>. La municipalidad
+        actualizará el estado conforme avance su atención. Consultá el estado
+        actual en el detalle de cada reporte.
       </p>
       <ol className="status-guide-list">
         {STATUS_GUIDE.map((item, index) => (
           <li
-            className={`status-guide-item ${item.available ? 'is-available' : 'is-future'}`}
+            className="status-guide-item"
             key={item.status}
           >
             <span className="status-step" aria-hidden="true">
-              {item.available ? '✓' : index + 1}
+              {index + 1}
             </span>
             <span>
               <strong>{item.status}</strong>
               <span className="status-description">{item.description}</span>
             </span>
-            {!item.available && <span className="status-future-tag">Etapa futura</span>}
           </li>
         ))}
       </ol>
@@ -239,7 +237,7 @@ function ReportForm({ user, onNavigate, onSignOut }) {
             <div>
               <dt>Estado</dt>
               <dd>
-                <span className="report-status">{createdReport.status}</span>
+                <span className="report-status" data-status={createdReport.status}>{createdReport.status}</span>
               </dd>
             </div>
           </dl>
@@ -601,7 +599,7 @@ function ReportList({ user, onNavigate, onSignOut }) {
                 <span className="report-list-date">
                   {formatDate(report.createdAt)}
                 </span>
-                <span className="report-status">{report.status}</span>
+                <span className="report-status" data-status={report.status}>{report.status}</span>
                 <span className="report-list-arrow" aria-hidden="true">
                   →
                 </span>
@@ -683,7 +681,7 @@ function ReportDetail({ reportId, user, onNavigate, onSignOut }) {
               <h1>{report.id}</h1>
               <p>Registrado el {formatDate(report.createdAt)}</p>
             </div>
-            <span className="report-status report-status-large">
+            <span className="report-status report-status-large" data-status={report.status}>
               {report.status}
             </span>
           </header>
@@ -712,7 +710,7 @@ function ReportDetail({ reportId, user, onNavigate, onSignOut }) {
             <div>
               <dt>Estado actual</dt>
               <dd>
-                <span className="report-status">{report.status}</span>
+                <span className="report-status" data-status={report.status}>{report.status}</span>
               </dd>
             </div>
           </dl>

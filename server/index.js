@@ -1,6 +1,6 @@
 import { randomBytes, pbkdf2, timingSafeEqual } from 'node:crypto'
 import { createServer } from 'node:http'
-import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { MAX_PHOTOS, MAX_PHOTO_BYTES, PHOTO_TYPES, photoValidationError } from '../shared/photoRules.js'
@@ -21,7 +21,7 @@ const PASSWORD_BYTES = 32
 const MAX_REQUEST_BYTES = 16 * 1024
 // Tres imágenes de 5 MiB codificadas en base64, más los campos del reporte.
 const MAX_REPORT_REQUEST_BYTES = MAX_PHOTOS * Math.ceil(MAX_PHOTO_BYTES / 3) * 4 + MAX_REQUEST_BYTES
-const DATABASE_VERSION = 2
+const DATABASE_VERSION = 3
 const REPORT_CATEGORIES = new Set(CATEGORY_LIST)
 const REPORT_STATUS_SET = new Set(REPORT_STATUSES)
 // Los datos ficticios de la bandeja municipal se pueden desactivar con =off.
@@ -85,18 +85,21 @@ function createEmptyDatabase() {
     accounts: [],
     sessions: [],
     reports: [],
+    notifications: [],
   }
 }
 
 function validateDatabase(database) {
   if (
     !database ||
-    ![1, DATABASE_VERSION].includes(database.version) ||
+    ![1, 2, DATABASE_VERSION].includes(database.version) ||
     !Array.isArray(database.accounts) ||
     !Array.isArray(database.sessions) ||
     (database.reports !== undefined && !Array.isArray(database.reports)) ||
-    (database.version === DATABASE_VERSION &&
-      !Array.isArray(database.reports))
+    (database.version >= 2 &&
+      !Array.isArray(database.reports)) ||
+    (database.notifications !== undefined && !Array.isArray(database.notifications)) ||
+    (database.version === DATABASE_VERSION && !Array.isArray(database.notifications))
   ) {
     throw new Error('El archivo JSON de la base de datos no tiene un formato válido.')
   }
@@ -134,11 +137,16 @@ function updateDatabase(update) {
     const result = await update(database)
     if (result?.changed) {
       const temporaryPath = `${DATABASE_PATH}.tmp-${randomBytes(6).toString('hex')}`
-      await writeFile(temporaryPath, `${JSON.stringify(database, null, 2)}\n`, {
-        encoding: 'utf8',
-        flag: 'wx',
-      })
-      await rename(temporaryPath, DATABASE_PATH)
+      try {
+        await writeFile(temporaryPath, `${JSON.stringify(database, null, 2)}\n`, {
+          encoding: 'utf8',
+          flag: 'wx',
+        })
+        await rename(temporaryPath, DATABASE_PATH)
+      } catch (error) {
+        await rm(temporaryPath, { force: true }).catch(() => {})
+        throw error
+      }
     }
 
     return result?.value
@@ -168,9 +176,11 @@ async function initializeDatabase() {
   await updateDatabase(async (database) => {
     const needsMigration =
       database.version !== DATABASE_VERSION ||
-      !Array.isArray(database.reports)
+      !Array.isArray(database.reports) ||
+      !Array.isArray(database.notifications)
     database.version = DATABASE_VERSION
     database.reports ??= []
+    database.notifications ??= []
 
     const existing = database.accounts.find(
       (account) => account.email === DEMO_MUNICIPAL_ACCOUNT.email,
@@ -351,9 +361,9 @@ function validatePhotos(value = []) {
   return photos
 }
 
-async function findAccessibleEvidenceReport(request, reportId) {
+async function findAccessibleReport(request, reportId) {
   const account = await findCurrentAccount(request)
-  if (!account) throw new HttpError(401, 'Iniciá sesión para consultar las fotografías.')
+  if (!account) throw new HttpError(401, 'Iniciá sesión para continuar.')
   const report = await updateDatabase((database) => ({
     changed: false,
     value: database.reports.find((item) =>
@@ -431,6 +441,51 @@ function municipalReportDetail(report) {
       },
     ],
   }
+}
+
+function applyMunicipalUpdate(database, report, field, value, expected, account, key) {
+  const previous = (report.municipalOperations ?? []).find(
+    (operation) => operation.key === key && operation.accountId === account.id,
+  )
+  if (previous) {
+    if (previous.field !== field || previous.value !== value) {
+      throw new HttpError(409, 'Ese envío ya se utilizó para otro cambio. Volvé a abrir la edición.')
+    }
+    return { changed: false, value: { report: municipalReportDetail(report), changed: false, repeated: true } }
+  }
+  if (report[field] === value) {
+    return { changed: false, value: { report: municipalReportDetail(report), changed: false, repeated: false } }
+  }
+  if (report[field] !== expected) {
+    throw new HttpError(409, 'Otra operación modificó este dato. Se debe volver a consultar el reporte antes de editarlo.')
+  }
+
+  const createdAt = new Date().toISOString()
+  if (field === 'status') {
+    const event = {
+      id: randomBytes(16).toString('hex'),
+      reportId: report.id,
+      previousStatus: report.status,
+      newStatus: value,
+      createdAt,
+    }
+    report.statusEvents ??= []
+    report.statusEvents.push(event)
+    database.notifications.push({
+      id: randomBytes(16).toString('hex'),
+      citizenId: report.citizenId,
+      reportId: report.id,
+      eventId: event.id,
+      newStatus: value,
+      createdAt,
+      url: `/ciudadano/reportes/${encodeURIComponent(report.id)}`,
+      readAt: null,
+    })
+  }
+  report[field] = value
+  report.municipalOperations ??= []
+  report.municipalOperations.push({ key, accountId: account.id, field, value })
+  return { changed: true, value: { report: municipalReportDetail(report), changed: true, repeated: false } }
 }
 
 function readInboxFilter(searchParams, name, validValues, label) {
@@ -782,7 +837,42 @@ async function handleApiRequest(request, response, pathname) {
     return
   }
 
-  // HU-10 / RF-19: detalle municipal de un reporte (solo lectura).
+  // HU-11/HU-12: el guardado, evento y aviso comparten la transacción del JSON.
+  const municipalUpdateMatch = pathname.match(/^\/api\/municipal\/reports\/([^/]+)\/(category|status)$/)
+  if (municipalUpdateMatch && request.method === 'PATCH') {
+    const account = await requireMunicipal(request)
+    let reportId
+    try {
+      reportId = decodeURIComponent(municipalUpdateMatch[1])
+    } catch {
+      throw new HttpError(404, 'No se encontró ese reporte.')
+    }
+    const field = municipalUpdateMatch[2]
+    const expectedField = field === 'category' ? 'expectedCategory' : 'expectedStatus'
+    const body = await readJsonBody(request)
+    const allowedValues = field === 'category' ? REPORT_CATEGORIES : REPORT_STATUS_SET
+    if (Object.keys(body).some((name) => ![field, expectedField].includes(name))) {
+      throw new HttpError(400, 'La operación solo permite modificar el dato seleccionado.')
+    }
+    if (!allowedValues.has(body[field]) || !allowedValues.has(body[expectedField])) {
+      throw new HttpError(400, field === 'category'
+        ? 'Seleccioná una categoría válida e indicá la categoría original.'
+        : 'Seleccioná un estado válido e indicá el estado original.')
+    }
+    const key = request.headers['idempotency-key']
+    if (typeof key !== 'string' || !/^[a-zA-Z0-9_-]{16,100}$/.test(key)) {
+      throw new HttpError(400, 'No se pudo identificar el cambio. Volvé a abrir la edición.')
+    }
+    const result = await updateDatabase((database) => {
+      const report = database.reports.find((item) => item.id === reportId)
+      if (!report) throw new HttpError(404, 'No se encontró ese reporte.')
+      return applyMunicipalUpdate(database, report, field, body[field], body[expectedField], account, key)
+    })
+    sendJson(response, 200, result)
+    return
+  }
+
+  // HU-10 / RF-19: detalle municipal de un reporte.
   const municipalDetailMatch = pathname.match(/^\/api\/municipal\/reports\/([^/]+)$/)
   if (municipalDetailMatch && request.method === 'GET') {
     await requireMunicipal(request)
@@ -805,6 +895,41 @@ async function handleApiRequest(request, response, pathname) {
     return
   }
 
+  // Mecanismos para HU-13/HU-14, sin implementar sus pantallas.
+  if (pathname === '/api/notifications' && request.method === 'GET') {
+    const account = await requireCitizen(request)
+    const notifications = await updateDatabase((database) => ({
+      changed: false,
+      value: database.notifications
+        .filter((notification) => notification.citizenId === account.id)
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+        .map((notification) => ({
+          id: notification.id,
+          reportId: notification.reportId,
+          eventId: notification.eventId,
+          newStatus: notification.newStatus,
+          createdAt: notification.createdAt,
+          url: notification.url,
+          readAt: notification.readAt,
+        })),
+    }))
+    sendJson(response, 200, { notifications })
+    return
+  }
+
+  const eventsMatch = pathname.match(/^\/api\/reports\/([^/]+)\/status-events$/)
+  if (eventsMatch && request.method === 'GET') {
+    let reportId
+    try {
+      reportId = decodeURIComponent(eventsMatch[1])
+    } catch {
+      throw new HttpError(404, 'No se encontró ese reporte.')
+    }
+    const report = await findAccessibleReport(request, reportId)
+    sendJson(response, 200, { events: report.statusEvents ?? [] })
+    return
+  }
+
   // Evidencias: las fotografías las pueden consultar su dueño y el personal municipal.
   const photosMatch = pathname.match(/^\/api\/reports\/([^/]+)\/photos(?:\/([^/]+))?$/)
   if (photosMatch && request.method === 'GET') {
@@ -816,7 +941,7 @@ async function handleApiRequest(request, response, pathname) {
     } catch {
       throw new HttpError(404, 'No se encontró esa fotografía.')
     }
-    const report = await findAccessibleEvidenceReport(request, reportId)
+    const report = await findAccessibleReport(request, reportId)
     if (!photoId) {
       sendJson(response, 200, { photos: (report.photos ?? []).map((photo) => publicPhoto(report.id, photo)) })
       return

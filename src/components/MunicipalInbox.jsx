@@ -18,9 +18,8 @@ function describeFilters(category, status) {
     .join(' y ')
 }
 
-export default function MunicipalInbox({ user, onNavigate, onSignOut }) {
-  const [category, setCategory] = useState('')
-  const [status, setStatus] = useState('')
+export default function MunicipalInbox({ user, onNavigate, onSignOut, filters, onFiltersChange }) {
+  const { category, status } = filters
   const [reloadToken, setReloadToken] = useState(0)
   const [result, setResult] = useState({
     key: null,
@@ -66,8 +65,7 @@ export default function MunicipalInbox({ user, onNavigate, onSignOut }) {
   }, [category, status, requestKey])
 
   function clearFilters() {
-    setCategory('')
-    setStatus('')
+    onFiltersChange({ category: '', status: '' })
   }
 
   const { reports, total, error } = result
@@ -95,7 +93,7 @@ export default function MunicipalInbox({ user, onNavigate, onSignOut }) {
             <select
               id="inbox-category"
               value={category}
-              onChange={(event) => setCategory(event.target.value)}
+              onChange={(event) => onFiltersChange({ ...filters, category: event.target.value })}
             >
               <option value="">Todas las categorías</option>
               {REPORT_CATEGORIES.map((item) => (
@@ -110,7 +108,7 @@ export default function MunicipalInbox({ user, onNavigate, onSignOut }) {
             <select
               id="inbox-status"
               value={status}
-              onChange={(event) => setStatus(event.target.value)}
+              onChange={(event) => onFiltersChange({ ...filters, status: event.target.value })}
             >
               <option value="">Todos los estados</option>
               {REPORT_STATUSES.map((item) => (

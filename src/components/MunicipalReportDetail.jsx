@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AppHeader } from './Dashboard.jsx'
 import EvidenceGallery from './EvidenceGallery.jsx'
+import MunicipalReportActions from './MunicipalReportActions.jsx'
 import { getMunicipalReport } from '../services/reportService.js'
 
 const DATE_FORMATTER = new Intl.DateTimeFormat('es-CR', {
@@ -134,6 +135,11 @@ export default function MunicipalReportDetail({
 
             <EvidenceGallery photos={report.photos} />
 
+            <MunicipalReportActions
+              report={report}
+              onUpdated={(updated) => setResult({ id: reportId, report: updated, error: '' })}
+            />
+
             <section className="history-section" aria-labelledby="history-title">
               <h2 id="history-title">Historial del reporte</h2>
               <ol className="history-list">
@@ -162,10 +168,6 @@ export default function MunicipalReportDetail({
               </p>
             </section>
 
-            <p className="report-status-immutable">
-              Esta vista es de solo lectura: la clasificación y el cambio de
-              estado se integrarán en los siguientes incrementos.
-            </p>
           </article>
         )}
       </main>

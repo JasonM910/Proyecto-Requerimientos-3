@@ -173,7 +173,7 @@ after(async () => {
 
 test('migra la base JSON anterior y agrega reportes sin perder la cuenta municipal', async () => {
   const database = JSON.parse(await readFile(DATABASE_PATH, 'utf8'))
-  assert.equal(database.version, 2)
+  assert.equal(database.version, 3)
   assert.deepEqual(database.reports, [])
   assert.ok(
     database.accounts.some(

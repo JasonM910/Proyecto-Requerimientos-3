@@ -83,6 +83,7 @@ export default function App() {
   const [isSessionLoading, setIsSessionLoading] = useState(true)
   const [startupError, setStartupError] = useState('')
   const [notice, setNotice] = useState('')
+  const [municipalFilters, setMunicipalFilters] = useState({ category: '', status: '' })
 
   const navigate = useCallback((destination, options = {}) => {
     const normalized = destination.replace(/\/+$/, '') || '/'
@@ -143,6 +144,7 @@ export default function App() {
   async function handleLogin(credentials) {
     const user = await signIn(credentials)
     setSession(user)
+    setMunicipalFilters({ category: '', status: '' })
     setStartupError('')
     setNotice('')
     navigate(homeForRole(user.role), { replace: true })
@@ -152,6 +154,7 @@ export default function App() {
     try {
       await signOut()
       setSession(null)
+      setMunicipalFilters({ category: '', status: '' })
       setStartupError('')
       setNotice('')
       navigate('/login', { replace: true })
@@ -222,6 +225,8 @@ export default function App() {
   if (effectivePath === MUNICIPAL_REPORTS_PATH) {
     return (
       <MunicipalInbox
+        filters={municipalFilters}
+        onFiltersChange={setMunicipalFilters}
         user={session}
         onNavigate={navigate}
         onSignOut={handleSignOut}

@@ -2194,7 +2194,8 @@
   flex: 1 1 220px;
 }
 
-.inbox-filters select {
+.inbox-filters select,
+.management-editor select {
   width: 100%;
   min-height: 47px;
   padding: 11px 13px;
@@ -2206,7 +2207,8 @@
   font-size: 14px;
 }
 
-.inbox-filters select:focus-visible {
+.inbox-filters select:focus-visible,
+.management-editor select:focus-visible {
   outline: 3px solid rgb(23 102 79 / 28%);
   outline-offset: 1px;
   border-color: var(--brand);
@@ -2410,4 +2412,81 @@
   margin-top: 5px;
   color: #68786e;
   font-size: 12px;
+}
+
+/* HU-11/HU-12: edición confirmada en el detalle municipal existente. */
+.municipal-management {
+  padding: 22px clamp(20px, 3vw, 26px);
+  border-top: 1px solid var(--line);
+}
+
+.municipal-management h2 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+
+.municipal-management > .notice {
+  margin-top: 16px;
+}
+
+.management-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.management-summary > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  background: #f7faf7;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.management-summary strong {
+  font-size: 14px;
+}
+
+.management-summary .button {
+  margin-top: auto;
+}
+
+.management-editor {
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid #b6cbbb;
+  border-radius: 10px;
+}
+
+.management-editor fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.management-editor legend {
+  padding: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.management-editor p {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.management-editor select {
+  max-width: 400px;
+}
+
+.management-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 18px;
 }
