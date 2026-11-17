@@ -18,20 +18,47 @@ const DEMO_REPORTS = [
   ['RC-20261115-D0000012', 'Infraestructura', 'Urbanización El Mirador', 'Entrada principal de la urbanización', 'Señal de alto caída y sin visibilidad en el cruce.', '2026-11-15T12:50:00.000Z', 'Recibido'],
 ]
 
+// HU-13: los reportes ficticios con un estado distinto de «Recibido» incluyen
+// los cambios que habrían llevado a ese estado, para que su historial sea
+// coherente con el estado que muestran la bandeja y los detalles.
+const DEMO_STATUS_PATH = ['Recibido', 'En revisión', 'En proceso', 'Resuelto']
+const DEMO_STEP_DELAYS_MS = [3 * 3600_000, 27 * 3600_000, 74 * 3600_000]
+
+export function createDemoStatusEvents(report) {
+  const target = DEMO_STATUS_PATH.indexOf(report.status)
+  const events = []
+  let moment = Date.parse(report.createdAt)
+  for (let step = 1; step <= target; step += 1) {
+    moment += DEMO_STEP_DELAYS_MS[step - 1]
+    events.push({
+      id: `demo-event-${report.id}-${step}`,
+      reportId: report.id,
+      previousStatus: DEMO_STATUS_PATH[step - 1],
+      newStatus: DEMO_STATUS_PATH[step],
+      createdAt: new Date(moment).toISOString(),
+    })
+  }
+  return events
+}
+
 export function createDemoReports() {
   return DEMO_REPORTS.map(
-    ([id, category, community, locationReference, description, createdAt, status]) => ({
-      id,
-      citizenId: DEMO_CITIZEN_ID,
-      idempotencyKey: `demo-${id}`,
-      description,
-      category,
-      community,
-      locationReference,
-      createdAt,
-      status,
-      photos: [],
-      demo: true,
-    }),
+    ([id, category, community, locationReference, description, createdAt, status]) => {
+      const report = {
+        id,
+        citizenId: DEMO_CITIZEN_ID,
+        idempotencyKey: `demo-${id}`,
+        description,
+        category,
+        community,
+        locationReference,
+        createdAt,
+        status,
+        photos: [],
+        demo: true,
+      }
+      report.statusEvents = createDemoStatusEvents(report)
+      return report
+    },
   )
 }

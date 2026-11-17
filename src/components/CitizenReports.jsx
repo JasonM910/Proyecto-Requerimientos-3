@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AppHeader } from './Dashboard.jsx'
 import PhotoPicker from './PhotoPicker.jsx'
 import EvidenceGallery from './EvidenceGallery.jsx'
+import StatusHistory from './StatusHistory.jsx'
 import { REPORT_CATEGORIES as CATEGORIES } from '../../shared/reportRules.js'
 import {
   createCitizenReport,
@@ -716,6 +717,8 @@ function ReportDetail({ reportId, user, onNavigate, onSignOut }) {
           </dl>
 
           <EvidenceGallery photos={report.photos} />
+
+          <StatusHistory history={report.history} reportId={report.id} />
 
           <p className="report-status-immutable">
             El estado de este reporte no se puede modificar desde la cuenta

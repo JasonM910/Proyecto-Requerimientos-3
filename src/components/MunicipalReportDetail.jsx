@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AppHeader } from './Dashboard.jsx'
 import EvidenceGallery from './EvidenceGallery.jsx'
 import MunicipalReportActions from './MunicipalReportActions.jsx'
+import StatusHistory from './StatusHistory.jsx'
 import { getMunicipalReport } from '../services/reportService.js'
 
 const DATE_FORMATTER = new Intl.DateTimeFormat('es-CR', {
@@ -140,33 +141,7 @@ export default function MunicipalReportDetail({
               onUpdated={(updated) => setResult({ id: reportId, report: updated, error: '' })}
             />
 
-            <section className="history-section" aria-labelledby="history-title">
-              <h2 id="history-title">Historial del reporte</h2>
-              <ol className="history-list">
-                {report.history.map((entry) => (
-                  <li key={entry.id}>
-                    <span className="history-dot" aria-hidden="true" />
-                    <div>
-                      <strong>{entry.description}</strong>
-                      <span className="history-meta">
-                        <span
-                          className="report-status"
-                          data-status={entry.status}
-                        >
-                          {entry.status}
-                        </span>
-                        <time dateTime={entry.at}>{formatDate(entry.at)}</time>
-                      </span>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-              <p className="field-hint">
-                Por ahora se muestra el registro inicial del reporte. El
-                historial completo de cambios se integrará en un siguiente
-                incremento.
-              </p>
-            </section>
+            <StatusHistory history={report.history} reportId={report.id} />
 
           </article>
         )}

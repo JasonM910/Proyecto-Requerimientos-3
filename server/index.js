@@ -5,7 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { MAX_PHOTOS, MAX_PHOTO_BYTES, PHOTO_TYPES, photoValidationError } from '../shared/photoRules.js'
 import { REPORT_CATEGORIES as CATEGORY_LIST, REPORT_STATUSES } from '../shared/reportRules.js'
-import { createDemoReports } from './demoData.js'
+import { createDemoReports, createDemoStatusEvents } from './demoData.js'
 
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const DATA_DIR = path.join(ROOT_DIR, 'data')
@@ -190,7 +190,16 @@ async function initializeDatabase() {
     if (needsDemoReports) {
       database.reports.push(...createDemoReports())
     }
-    if (existing && !needsMigration && !needsDemoReports) {
+    // HU-13: los reportes ficticios sembrados antes del historial reciben los
+    // cambios de estado que explican su estado actual.
+    let needsDemoHistory = false
+    for (const report of database.reports) {
+      if (report.demo === true && !Array.isArray(report.statusEvents)) {
+        report.statusEvents = createDemoStatusEvents(report)
+        needsDemoHistory = true
+      }
+    }
+    if (existing && !needsMigration && !needsDemoReports && !needsDemoHistory) {
       return { changed: false }
     }
 
@@ -300,6 +309,7 @@ function publicReport(report) {
     createdAt: report.createdAt,
     status: report.status,
     photos: (report.photos ?? []).map((photo) => publicPhoto(report.id, photo)),
+    history: reportHistory(report),
   }
 }
 
@@ -418,6 +428,39 @@ function municipalReportSummary(report) {
   }
 }
 
+// HU-13 / RF-14: historial cronológico (del más antiguo al más reciente) que se
+// deriva del registro inicial y de los cambios confirmados en `statusEvents`.
+// Los eventos no se modifican ni se eliminan: cada cambio nuevo solo agrega uno.
+function reportHistory(report) {
+  const changes = (report.statusEvents ?? [])
+    .map((event, order) => ({ event, order }))
+    .sort(
+      (left, right) =>
+        left.event.createdAt.localeCompare(right.event.createdAt) ||
+        left.order - right.order,
+    )
+    .map(({ event }) => ({
+      id: event.id,
+      reportId: event.reportId,
+      type: 'status-change',
+      at: event.createdAt,
+      previousStatus: event.previousStatus,
+      status: event.newStatus,
+    }))
+
+  return [
+    {
+      id: 'created',
+      reportId: report.id,
+      type: 'created',
+      at: report.createdAt,
+      previousStatus: null,
+      status: 'Recibido',
+    },
+    ...changes,
+  ]
+}
+
 // HU-10 / RF-19: detalle para revisión. Nunca incluye citizenId, la clave de
 // idempotencia ni datos de la cuenta que registró el reporte.
 function municipalReportDetail(report) {
@@ -430,16 +473,7 @@ function municipalReportDetail(report) {
     createdAt: report.createdAt,
     status: report.status,
     photos: (report.photos ?? []).map((photo) => publicPhoto(report.id, photo)),
-    // Revisión inicial: solo el registro del reporte. El historial completo de
-    // cambios de estado se integra con HU-13.
-    history: [
-      {
-        id: 'created',
-        status: 'Recibido',
-        at: report.createdAt,
-        description: 'Reporte recibido en la plataforma.',
-      },
-    ],
+    history: reportHistory(report),
   }
 }
 
