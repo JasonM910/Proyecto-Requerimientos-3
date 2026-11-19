@@ -5,10 +5,15 @@ Costa Rica. Incluye HU-01 a HU-14: reportes con evidencias, gestión municipal,
 historial de estados y bandeja de notificaciones ciudadanas. El incremento
 HU-14 completa los avisos internos de recepción y su lectura persistente.
 
+El formulario también permite reportar desde el teléfono con una nota de voz
+grabada, ubicación GPS o seleccionada en un mapa y fotografías tomadas con la
+cámara. La descripción escrita y la dirección manual siguen disponibles.
+
 ## Requisitos y ejecución
 
 Necesitás Node.js compatible con Vite 8. No se requieren dependencias
-adicionales para el servidor ni para la base JSON.
+adicionales para el servidor ni para la base JSON. El mapa usa exclusivamente
+Google Maps JavaScript API mediante el cargador oficial `@googlemaps/js-api-loader`.
 
 ```bash
 npm install
@@ -16,8 +21,18 @@ npm run dev
 ```
 
 La aplicación y su API local estarán disponibles en `http://127.0.0.1:5173`.
-El primer inicio crea `data/database.json` automáticamente y agrega la cuenta
-municipal de demostración. El archivo se mantiene local y no se incluye en Git.
+El repositorio incluye `data/database.json` con cuentas, reportes, evidencias,
+historiales y notificaciones compartidos. El primer inicio lo copia a
+`data/database.local.json`, donde se guardan los cambios de esa computadora.
+La copia local no se incluye en Git y los reinicios no reemplazan sus datos.
+
+Para usar micrófono, cámara web y GPS desde un **teléfono físico**, la aplicación
+debe estar publicada mediante **HTTPS** con un certificado válido y accesible
+desde el teléfono. `localhost`/`127.0.0.1` sirven para las pruebas locales en
+la misma computadora; abrir una dirección HTTP de la red local desde el móvil
+no habilita todas esas capacidades. El navegador solicita permisos únicamente
+cuando se pulsa grabar, tomar fotografía o usar ubicación. El servidor sigue
+escuchando en la interfaz local: este cambio no publica la aplicación en Internet.
 
 Para validar y ejecutar la versión compilada:
 
@@ -94,10 +109,149 @@ una, se completan el correo y la contraseña de demostración. Las cuentas
 ciudadanas existentes guardan su contraseña de demostración después de su
 próximo inicio de sesión correcto.
 
+### Cuentas ciudadanas compartidas
+
+Estas cuentas se crean automáticamente en cada copia del repositorio. Todas
+usan la contraseña `Ciudadano2026!`:
+
+| Nombre | Correo | Reportes iniciales |
+| --- | --- | --- |
+| Ana Rojas | `ana.rojas@example.test` | 4 |
+| Luis Vargas | `luis.vargas@example.test` | 4 |
+| Sofía Mora | `sofia.mora@example.test` | 4 |
+
+Los doce casos incluyen distintos estados, historiales y avisos de recepción
+y de cambios. Cada cuenta consulta sus propios casos; la cuenta municipal
+puede consultar los doce. Las definiciones están versionadas en
+`server/demoData.js`, por lo que un compañero solo necesita obtener los cambios,
+ejecutar `npm install` y luego `npm run dev` para disponer de los mismos ejemplos.
+También se pueden cargar sin iniciar el servidor con `npm run seed`.
+
+La carga es idempotente: agrega lo que falta, conserva las cuentas personales,
+los cambios municipales y las lecturas de avisos, y no duplica casos al reiniciar.
+Los casos antiguos de ejemplo se vinculan a estas cuentas sin modificar los
+reportes personales. Cada copia conserva sus propias modificaciones; esto no
+sincroniza bases entre computadoras. No se debe compartir `data/database.local.json`
+ni `.env.local`. Para iniciar sin importar la copia ni agregar ejemplos, configurá
+`REPORTE_CIUDADANO_DEMO_DATA=off`; esa opción no elimina datos ya existentes.
+
+### Actualizar los registros compartidos en GitHub
+
+`data/database.json` es la instantánea que recibe quien clona el repositorio.
+Incluye los registros exportados de las cuentas existentes además de los doce
+casos iniciales. Para actualizarla después de crear nuevos reportes o historiales:
+
+```bash
+npm run db:export
+git add data/database.json
+git commit -m "Actualizar registros compartidos"
+git push
+```
+
+La exportación conserva cuentas, reportes, fotografías, audios, coordenadas,
+historiales y avisos. No exporta sesiones activas y reemplaza las credenciales
+personales por claves de prueba: `Ciudadano2026!` para todas las cuentas
+ciudadanas compartidas y `Municipal2026!` para las municipales. Las credenciales
+y sesiones de tu copia local permanecen intactas. Revisá que las evidencias y
+los datos de las personas sean apropiados para compartir antes de exportar.
+
+Una copia local ya existente no se sobrescribe al actualizar Git. Para cargar
+de nuevo la instantánea, detené el servidor, guardá un respaldo de
+`data/database.local.json`, retiralo de la carpeta `data` y reiniciá la aplicación.
+Esto comienza una copia local nueva desde los registros compartidos.
+
+Si actualizás desde una versión anterior que guardaba sus cambios directamente
+en `data/database.json`, respaldá ese archivo antes de actualizar el repositorio
+y usá ese respaldo como `data/database.local.json` para conservar tus registros.
+
+### Diseño de la interfaz
+
+La interfaz usa CSS propio, sin Tailwind. La paleta azul está inspirada en el
+[sitio de la Municipalidad de San Carlos](https://www.munisc.go.cr/), con iconos
+SVG consistentes y estilos compartidos para botones, formularios y estados.
+La [revisión de diseño](docs/design-review.md) documenta los cambios y la
+validación en móvil y escritorio.
+
 ## Base de datos JSON
 
-`data/database.json` es el almacenamiento local editable por el servidor. Tiene
-esta estructura:
+### Captura rápida con voz, GPS y cámara
+
+1. Pulsá **Grabar descripción**, contá lo que sucede y detené la grabación.
+   Podés escucharla, retirarla o grabarla de nuevo. Se guarda audio, no una
+   transcripción automática; no hay opción para subir archivos de audio.
+2. Seleccioná una categoría.
+3. Pulsá **Usar mi ubicación actual** y verificá el punto y su precisión. También
+   podés tocar el mapa, arrastrar el marcador o mover el mapa con las flechas
+   del teclado y pulsar **Marcar el centro del mapa**. La referencia escrita es
+   opcional cuando hay un punto seleccionado.
+4. Pulsá **Tomar fotografía**, encuadrá y capturá. La cámara se cierra y aparece
+   la vista previa. La galería sigue disponible; todas las fotos comparten el
+   límite existente de tres imágenes. Si falla el acceso a la cámara web, se
+   ofrece el selector de cámara nativo del teléfono.
+5. Revisá y enviá. Con audio y ubicación seleccionada no hace falta escribir
+   descripción, comunidad ni referencia. Sin audio se exige descripción
+   escrita; sin coordenadas se exige comunidad y referencia, como antes.
+
+Las notas de voz tienen un límite de dos minutos y 5 MiB. Se admiten los
+contenedores que grabe el navegador en WebM, MP4 u Ogg. El servidor valida el
+tamaño, la duración declarada, la codificación y la firma del contenedor; no
+transcribe ni recodifica el audio. Las fotografías de cámara se convierten a
+JPEG de hasta 1600 píxeles en su lado mayor y se validan igual que las demás.
+El micrófono y la cámara liberan sus pistas al detener, cancelar o salir del
+formulario. El envío permanece bloqueado mientras se graba o prepara una
+captura, y los errores no eliminan los demás campos o evidencias.
+
+Los reportes pueden contener `audio: { type, size, durationSeconds, data }`
+(base64 privado) y `location: { latitude, longitude, accuracy? }`, con precisión
+en metros cuando proviene del GPS. Son campos opcionales compatibles con la
+versión 3 y los reportes anteriores. La API devuelve solo los metadatos y la
+URL del audio. `GET /api/reports/:id/audio` exige propietario o rol municipal
+y soporta rangos de bytes para reproducción y búsqueda en el audio. Ambas
+vistas de detalle muestran el reproductor, el mapa y un enlace para abrir
+las coordenadas en Google Maps. Cambiar categoría o estado conserva estas
+evidencias y sus coordenadas.
+
+El mapa utiliza exclusivamente Google Maps, con su atribución y sus controles,
+y requiere Internet y una clave válida. Si falla, las coordenadas seleccionadas
+se conservan y siguen disponibles GPS, texto, dirección y galería. Los audios
+y las fotografías permanecen en el servidor local; el visor comparte con
+Google la información necesaria para mostrar el área y el punto seleccionados.
+
+### Configurar Google Maps
+
+Cada integrante configura su propia clave. `.env.example` es una plantilla
+versionada sin credenciales; Vite no la usa directamente. `.env.local` contiene
+los valores de esa computadora y está excluido de Git. No se comparten claves
+de Google Maps en el repositorio.
+
+1. Copiá `.env.example` a `.env.local`.
+2. Completá `VITE_GOOGLE_MAPS_API_KEY` con una clave de Maps JavaScript API.
+   Para este prototipo se puede usar una [Maps Demo Key](https://developers.google.com/maps/documentation/javascript/demo-key),
+   sujeta a los requisitos y cuotas de Google, sin ingresar datos de facturación.
+   Para una clave estándar se debe habilitar Maps JavaScript API y configurar
+   la cuenta del proyecto según [las instrucciones de Google](https://developers.google.com/maps/documentation/javascript/get-api-key).
+3. `VITE_GOOGLE_MAPS_MAP_ID=DEMO_MAP_ID` sirve para desarrollo; al publicar,
+   configurá un Map ID propio para los marcadores avanzados.
+4. Reiniciá `npm run dev`. Para la versión compilada volvé a ejecutar
+   `npm run build`; las variables `VITE_` se incorporan al cliente al compilar.
+
+La clave web es visible en el navegador: restringila por sitio y por API en
+Google Cloud. `.env.local` queda excluido de Git. Sin clave, el componente
+muestra un mensaje de indisponibilidad en lugar de un mapa de otro proveedor.
+El cargador solicita las bibliotecas de mapa y marcadores una sola vez, en
+español y con región Costa Rica. Permite tocar el mapa, arrastrar el marcador,
+usar el centro y consultar puntos guardados en ambos detalles.
+
+Referencias: [permisos de captura](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia),
+[GPS](https://developer.mozilla.org/en-US/docs/Web/API/Geolocation/getCurrentPosition),
+[carga de Google Maps](https://developers.google.com/maps/documentation/javascript/load-maps-js-api) y
+[enlaces de Google Maps](https://developers.google.com/maps/documentation/urls/get-started).
+
+### Estructura persistente
+
+`data/database.local.json` es el almacenamiento editable por el servidor.
+`data/database.json` es la instantánea versionada que se importa solo al crear
+la copia local. Ambos tienen esta estructura:
 
 ```json
 {
@@ -144,8 +298,9 @@ La colección raíz `notifications` contiene `id`, `citizenId`, `reportId`,
 `eventId`, `newStatus`, `createdAt`, `url` y `readAt`. El destinatario
 siempre proviene del autor almacenado del reporte; la petición no puede elegirlo.
 El evento y el aviso comparten fecha y están vinculados por `eventId`. Los casos
-ficticios de HU-09 pertenecen a `demo-seed`: sus avisos se vinculan a ese autor
-ficticio y no aparecen en cuentas ciudadanas reales.
+de ejemplo de HU-09 pertenecen a las tres cuentas ciudadanas compartidas;
+sus avisos no aparecen en las cuentas personales. Al iniciar, los casos antiguos
+marcados como ejemplos cuyo autor era `demo-seed` se reasignan a esas cuentas.
 
 HU-14 guarda la recepción junto con el reporte nuevo, en la misma operación
 atómica y bajo su clave de idempotencia. Ese aviso usa `eventId: "created"`,
@@ -249,6 +404,21 @@ Un bloqueo evita solicitudes simultáneas por clics repetidos. No se envían
 correos ni se usan servicios externos.
 
 ## Pruebas automatizadas
+
+`tests/capture.test.js` verifica creación mediante voz y coordenadas sin texto,
+compatibilidad con los campos manuales, límites y validación de grabaciones,
+validación de coordenadas, permisos del audio, rangos de reproducción,
+idempotencia y persistencia después de cambios municipales y reinicios.
+`tests/fixtures/description.webm` es una grabación generada por MediaRecorder
+con un micrófono sintético, sin voces ni datos personales reales. La prueba
+en Edge usa dispositivos de captura sintéticos y GPS simulado: comprueba
+grabación, reproducción, captura de foto, selección de ubicación, permisos
+rechazados, liberación de pistas y recorrido alternativo por texto y galería.
+No sustituye la prueba de hardware en un teléfono Android o iPhone físico.
+Tras el cambio a Google Maps se comprobó el cargador oficial, selección por
+clic y centro, arrastre, GPS, carga única y errores mediante un doble del SDK,
+además del caso sin clave. La cartografía real de Google queda pendiente de
+verificación con una clave válida; no se utiliza un proveedor alternativo.
 
 `npm test` levanta una instancia aislada con una base JSON temporal y comprueba
 validación, creación idempotente, separación de usuarios, autorización

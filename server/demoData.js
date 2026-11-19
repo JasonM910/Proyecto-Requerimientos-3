@@ -1,7 +1,13 @@
 // Datos ficticios de una municipalidad de demostración (HU-09 / RF-18).
 // No corresponden a personas, lugares ni cuentas reales. Los reportes quedan
-// marcados con `demo: true` y no pertenecen a ninguna cuenta ciudadana.
+// marcados con `demo: true` y pertenecen a las cuentas de ejemplo compartidas.
 export const DEMO_CITIZEN_ID = 'demo-seed'
+
+export const DEMO_CITIZEN_ACCOUNTS = [
+  { id: 'sample-citizen-ana', name: 'Ana Rojas', email: 'ana.rojas@example.test', password: 'Ciudadano2026!' },
+  { id: 'sample-citizen-luis', name: 'Luis Vargas', email: 'luis.vargas@example.test', password: 'Ciudadano2026!' },
+  { id: 'sample-citizen-sofia', name: 'Sofía Mora', email: 'sofia.mora@example.test', password: 'Ciudadano2026!' },
+]
 
 const DEMO_REPORTS = [
   ['RC-20261028-D0000001', 'Infraestructura', 'Barrio Los Laureles', 'Frente a la escuela, calle principal', 'Hueco profundo en la calzada que dificulta el paso de vehículos.', '2026-10-28T14:05:00.000Z', 'Resuelto'],
@@ -43,10 +49,10 @@ export function createDemoStatusEvents(report) {
 
 export function createDemoReports() {
   return DEMO_REPORTS.map(
-    ([id, category, community, locationReference, description, createdAt, status]) => {
+    ([id, category, community, locationReference, description, createdAt, status], index) => {
       const report = {
         id,
-        citizenId: DEMO_CITIZEN_ID,
+        citizenId: DEMO_CITIZEN_ACCOUNTS[index % DEMO_CITIZEN_ACCOUNTS.length].id,
         idempotencyKey: `demo-${id}`,
         description,
         category,

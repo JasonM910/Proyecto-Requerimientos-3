@@ -2,12 +2,13 @@ import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import { once } from 'node:events'
-import { readFile, rm } from 'node:fs/promises'
+import { readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { after, before, test } from 'node:test'
+import { DEMO_CITIZEN_ACCOUNTS } from '../server/demoData.js'
 
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const SERVER_PATH = path.join(ROOT_DIR, 'server', 'index.js')
@@ -261,14 +262,14 @@ test('HU-09 un reporte nuevo aparece en la bandeja como Recibido sin exponer des
   assert.equal(inbox.body.total, 13)
 })
 
-test('HU-09 los datos ficticios se siembran una sola vez y no pertenecen a cuentas ciudadanas', async () => {
+test('HU-09 los datos de ejemplo se siembran una vez y pertenecen solo a cuentas de ejemplo', async () => {
   await server.stop()
   server = await startServer()
   const database = JSON.parse(await readFile(DATABASE_PATH, 'utf8'))
   const demo = database.reports.filter((report) => report.demo === true)
   assert.equal(demo.length, 12, 'reiniciar no duplica los datos de demostración')
   assert.ok(
-    demo.every((report) => !database.accounts.some((account) => account.id === report.citizenId)),
+    demo.every((report) => database.accounts.some((account) => account.id === report.citizenId && account.demo === true && account.role === 'citizen')),
   )
 
   const citizen = createClient()
@@ -404,4 +405,74 @@ test('HU-10 el detalle exige cuenta municipal y responde 404 ante identificadore
   assert.equal((await municipal.request(detailPath('RC-20000101-00000000'))).status, 404)
   assert.equal((await municipal.request(`${INBOX}/%E0%A4%A`)).status, 404)
   assert.equal((await municipal.request(`${INBOX}/uno/dos`)).status, 404)
+})
+
+test('datos compartidos: tres cuentas de ejemplo pueden consultar solo sus cuatro casos y avisos', async () => {
+  const identifiers = new Set()
+  let previous
+  for (const sample of DEMO_CITIZEN_ACCOUNTS) {
+    const owner = createClient()
+    const login = await owner.request('/api/auth/login', { method: 'POST', body: { email: sample.email, password: sample.password } })
+    assert.equal(login.status, 200)
+    assert.equal(login.body.user.id, sample.id)
+    const reports = (await owner.request('/api/reports')).body.reports
+    assert.equal(reports.length, 4)
+    const notices = (await owner.request('/api/notifications')).body.notifications
+    assert.ok(notices.length >= 4)
+    for (const report of reports) {
+      assert.ok(!identifiers.has(report.id))
+      identifiers.add(report.id)
+      assert.equal(notices.filter((notice) => notice.reportId === report.id).length, report.history.length)
+      assert.ok(notices.some((notice) => notice.reportId === report.id && notice.eventId === 'created'))
+    }
+    assert.ok(notices.every((notice) => reports.some((report) => report.id === notice.reportId)))
+    if (previous) {
+      assert.equal((await owner.request(`/api/reports/${previous.reportId}`)).status, 404)
+      assert.equal((await owner.request(`/api/notifications/${previous.noticeId}/read`, { method: 'PATCH' })).status, 404)
+    }
+    previous = { reportId: reports[0].id, noticeId: notices[0].id }
+  }
+  assert.equal(identifiers.size, 12)
+})
+
+test('datos compartidos: reiniciar conserva cuentas, lecturas y modificaciones municipales de los ejemplos', async () => {
+  const sample = DEMO_CITIZEN_ACCOUNTS[0]
+  const owner = createClient()
+  await owner.request('/api/auth/login', { method: 'POST', body: { email: sample.email, password: sample.password } })
+  const report = (await owner.request('/api/reports')).body.reports[0]
+  const municipal = await signInMunicipal()
+  const category = report.category === 'Limpieza' ? 'Infraestructura' : 'Limpieza'
+  const update = await municipal.request(`${INBOX}/${report.id}/category`, {
+    method: 'PATCH', headers: { 'Idempotency-Key': 'sample-preserve-category-0001' },
+    body: { category, expectedCategory: report.category },
+  })
+  assert.equal(update.status, 200)
+  const notice = (await owner.request('/api/notifications')).body.notifications[0]
+  assert.equal((await owner.request(`/api/notifications/${notice.id}/read`, { method: 'PATCH' })).status, 200)
+  const original = JSON.parse(await readFile(DATABASE_PATH, 'utf8'))
+  await server.stop()
+  server = await startServer()
+  const stored = JSON.parse(await readFile(DATABASE_PATH, 'utf8'))
+  assert.deepEqual(stored.accounts, original.accounts)
+  assert.deepEqual(stored.reports, original.reports)
+  assert.deepEqual(stored.notifications, original.notifications)
+  assert.equal(stored.accounts.filter((account) => account.demo === true).length, 3)
+})
+
+test('datos compartidos: migra autores ficticios anteriores sin duplicar casos ni alterar datos personales', async () => {
+  const legacy = JSON.parse(await readFile(DATABASE_PATH, 'utf8'))
+  const sampleIds = new Set(DEMO_CITIZEN_ACCOUNTS.map((sample) => sample.id))
+  const originalOwners = new Map(legacy.reports.filter((report) => report.demo).map((report) => [report.id, report.citizenId]))
+  legacy.accounts = legacy.accounts.filter((account) => !sampleIds.has(account.id))
+  const personalAccounts = structuredClone(legacy.accounts)
+  for (const report of legacy.reports) if (originalOwners.has(report.id)) report.citizenId = 'demo-seed'
+  for (const notice of legacy.notifications) if (originalOwners.has(notice.reportId)) notice.citizenId = 'demo-seed'
+  await server.stop()
+  await writeFile(DATABASE_PATH, JSON.stringify(legacy), 'utf8')
+  server = await startServer()
+  const migrated = JSON.parse(await readFile(DATABASE_PATH, 'utf8'))
+  assert.deepEqual(migrated.accounts.filter((account) => !sampleIds.has(account.id)), personalAccounts)
+  assert.equal(migrated.accounts.filter((account) => sampleIds.has(account.id)).length, 3)
+  assert.deepEqual(migrated.reports, legacy.reports.map((report) => originalOwners.has(report.id) ? { ...report, citizenId: originalOwners.get(report.id) } : report))
+  assert.deepEqual(migrated.notifications, legacy.notifications.map((notice) => originalOwners.has(notice.reportId) ? { ...notice, citizenId: originalOwners.get(notice.reportId) } : notice))
 })

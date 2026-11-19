@@ -1,4 +1,5 @@
 import { useId, useState } from 'react'
+import Icon from './Icon.jsx'
 
 function EvidencePhoto({ photo, index }) {
   const [failed, setFailed] = useState(false)
@@ -8,14 +9,11 @@ function EvidencePhoto({ photo, index }) {
       {failed ? (
         <p className="photo-unavailable" role="alert">No se pudo cargar esta fotografía. Recargá la página o volvé a iniciar sesión.</p>
       ) : (
-        <a className="photo-open" href={photo.url} target="_blank" rel="noreferrer" aria-label={`Abrir fotografía ${index + 1}: ${photo.name} (nueva pestaña)`}>
-          <img src={photo.url} alt={`Evidencia ${index + 1}: ${photo.name}`} loading="lazy" onError={() => setFailed(true)} />
-          <span>Ver fotografía completa ↗</span>
+        <a className="photo-open" href={photo.url} target="_blank" rel="noreferrer" aria-label={`Abrir fotografía ${index + 1} (nueva pestaña)`}>
+          <img src={photo.url} alt={`Evidencia ${index + 1} del reporte`} loading="lazy" onError={() => setFailed(true)} />
+          <span>Ver fotografía completa <Icon name="external" /></span>
         </a>
       )}
-      <div className="photo-card-copy">
-        <span className="photo-name" title={photo.name}>{photo.name}</span>
-      </div>
     </li>
   )
 }

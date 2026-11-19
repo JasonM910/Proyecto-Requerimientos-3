@@ -1,0 +1,551 @@
+{
+  "version": 3,
+  "accounts": [
+    {
+      "id": "demo-municipal",
+      "name": "Personal municipal",
+      "email": "municipal@reporteciudadano.cr",
+      "role": "municipal",
+      "createdAt": "2026-11-09T02:11:32.669Z",
+      "salt": "ec9c66d67c09e5c201a088aebd9fe421",
+      "passwordHash": "533294b009491e1702cd14885fa613577ad950c16473926d38d3dbe611310e7a",
+      "demoPassword": "Municipal2026!"
+    },
+    {
+      "id": "sample-citizen-ana",
+      "name": "Ana Rojas",
+      "email": "ana.rojas@example.test",
+      "role": "citizen",
+      "createdAt": "2026-11-19T20:33:32.359Z",
+      "demo": true,
+      "salt": "8bfdade9692d6340b920b46dc6aa1c01",
+      "passwordHash": "3743378a891dabca588146303338a6188f6ae35e6161d618d1146da5e30f4ee0",
+      "demoPassword": "Ciudadano2026!"
+    },
+    {
+      "id": "sample-citizen-luis",
+      "name": "Luis Vargas",
+      "email": "luis.vargas@example.test",
+      "role": "citizen",
+      "createdAt": "2026-11-19T20:33:32.375Z",
+      "demo": true,
+      "salt": "3cc0eeb1ec8ebd12682338a25edcafd1",
+      "passwordHash": "ca87a8e32dddd6903db272f281046cf2ca1b81b5559773f4354baaf6b7f52ffd",
+      "demoPassword": "Ciudadano2026!"
+    },
+    {
+      "id": "sample-citizen-sofia",
+      "name": "Sofía Mora",
+      "email": "sofia.mora@example.test",
+      "role": "citizen",
+      "createdAt": "2026-11-19T20:33:32.392Z",
+      "demo": true,
+      "salt": "4b5b0e47f5363c2d673d0781ea45bc1b",
+      "passwordHash": "c2e19676cda562a42bdd5e9f81d334deb28afd19424be5ba22e8b1c5ed8df96d",
+      "demoPassword": "Ciudadano2026!"
+    }
+  ],
+  "sessions": [],
+  "reports": [
+    {
+      "id": "RC-20261028-D0000001",
+      "citizenId": "sample-citizen-ana",
+      "idempotencyKey": "demo-RC-20261028-D0000001",
+      "description": "Hueco profundo en la calzada que dificulta el paso de vehículos.",
+      "category": "Infraestructura",
+      "community": "Barrio Los Laureles",
+      "locationReference": "Frente a la escuela, calle principal",
+      "createdAt": "2026-10-28T14:05:00.000Z",
+      "status": "Resuelto",
+      "photos": [],
+      "demo": true,
+      "statusEvents": [
+        {
+          "id": "demo-event-RC-20261028-D0000001-1",
+          "reportId": "RC-20261028-D0000001",
+          "previousStatus": "Recibido",
+          "newStatus": "En revisión",
+          "createdAt": "2026-10-28T17:05:00.000Z"
+        },
+        {
+          "id": "demo-event-RC-20261028-D0000001-2",
+          "reportId": "RC-20261028-D0000001",
+          "previousStatus": "En revisión",
+          "newStatus": "En proceso",
+          "createdAt": "2026-10-29T20:05:00.000Z"
+        },
+        {
+          "id": "demo-event-RC-20261028-D0000001-3",
+          "reportId": "RC-20261028-D0000001",
+          "previousStatus": "En proceso",
+          "newStatus": "Resuelto",
+          "createdAt": "2026-11-01T22:05:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": "RC-20261030-D0000002",
+      "citizenId": "sample-citizen-luis",
+      "idempotencyKey": "demo-RC-20261030-D0000002",
+      "description": "Acumulación de basura y escombros en el lote baldío.",
+      "category": "Limpieza",
+      "community": "Villa Esperanza",
+      "locationReference": "Lote baldío junto al salón comunal",
+      "createdAt": "2026-10-30T09:40:00.000Z",
+      "status": "Resuelto",
+      "photos": [],
+      "demo": true,
+      "statusEvents": [
+        {
+          "id": "demo-event-RC-20261030-D0000002-1",
+          "reportId": "RC-20261030-D0000002",
+          "previousStatus": "Recibido",
+          "newStatus": "En revisión",
+          "createdAt": "2026-10-30T12:40:00.000Z"
+        },
+        {
+          "id": "demo-event-RC-20261030-D0000002-2",
+          "reportId": "RC-20261030-D0000002",
+          "previousStatus": "En revisión",
+          "newStatus": "En proceso",
+          "createdAt": "2026-10-31T15:40:00.000Z"
+        },
+        {
+          "id": "demo-event-RC-20261030-D0000002-3",
+          "reportId": "RC-20261030-D0000002",
+          "previousStatus": "En proceso",
+          "newStatus": "Resuelto",
+          "createdAt": "2026-11-03T17:40:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": "RC-20261102-D0000003",
+      "citizenId": "sample-citizen-sofia",
+      "idempotencyKey": "demo-RC-20261102-D0000003",
+      "description": "Juegos del parque con piezas sueltas que representan un riesgo.",
+      "category": "Espacios públicos",
+      "community": "San Isidro Norte",
+      "locationReference": "Parque infantil, costado este",
+      "createdAt": "2026-11-02T16:20:00.000Z",
+      "status": "En proceso",
+      "photos": [],
+      "demo": true,
+      "statusEvents": [
+        {
+          "id": "demo-event-RC-20261102-D0000003-1",
+          "reportId": "RC-20261102-D0000003",
+          "previousStatus": "Recibido",
+          "newStatus": "En revisión",
+          "createdAt": "2026-11-02T19:20:00.000Z"
+        },
+        {
+          "id": "demo-event-RC-20261102-D0000003-2",
+          "reportId": "RC-20261102-D0000003",
+          "previousStatus": "En revisión",
+          "newStatus": "En proceso",
+          "createdAt": "2026-11-03T22:20:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": "RC-20261104-D0000004",
+      "citizenId": "sample-citizen-ana",
+      "idempotencyKey": "demo-RC-20261104-D0000004",
+      "description": "Alcantarilla sin tapa en la esquina.",
+      "category": "Infraestructura",
+      "community": "Urbanización El Mirador",
+      "locationReference": "Esquina del tanque de agua",
+      "createdAt": "2026-11-04T11:15:00.000Z",
+      "status": "En proceso",
+      "photos": [],
+      "demo": true,
+      "statusEvents": [
+        {
+          "id": "demo-event-RC-20261104-D0000004-1",
+          "reportId": "RC-20261104-D0000004",
+          "previousStatus": "Recibido",
+          "newStatus": "En revisión",
+          "createdAt": "2026-11-04T14:15:00.000Z"
+        },
+        {
+          "id": "demo-event-RC-20261104-D0000004-2",
+          "reportId": "RC-20261104-D0000004",
+          "previousStatus": "En revisión",
+          "newStatus": "En proceso",
+          "createdAt": "2026-11-05T17:15:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": "RC-20261105-D0000005",
+      "citizenId": "sample-citizen-luis",
+      "idempotencyKey": "demo-RC-20261105-D0000005",
+      "description": "Basura desbordada alrededor de los contenedores de la parada.",
+      "category": "Limpieza",
+      "community": "Barrio Los Laureles",
+      "locationReference": "Parada de autobús sobre la calle principal",
+      "createdAt": "2026-11-05T07:55:00.000Z",
+      "status": "En revisión",
+      "photos": [],
+      "demo": true,
+      "statusEvents": [
+        {
+          "id": "demo-event-RC-20261105-D0000005-1",
+          "reportId": "RC-20261105-D0000005",
+          "previousStatus": "Recibido",
+          "newStatus": "En revisión",
+          "createdAt": "2026-11-05T10:55:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": "RC-20261107-D0000006",
+      "citizenId": "sample-citizen-sofia",
+      "idempotencyKey": "demo-RC-20261107-D0000006",
+      "description": "Iluminación de la cancha apagada desde hace varias noches.",
+      "category": "Espacios públicos",
+      "community": "Villa Esperanza",
+      "locationReference": "Cancha multiuso, entrada sur",
+      "createdAt": "2026-11-07T19:30:00.000Z",
+      "status": "En revisión",
+      "photos": [],
+      "demo": true,
+      "statusEvents": [
+        {
+          "id": "demo-event-RC-20261107-D0000006-1",
+          "reportId": "RC-20261107-D0000006",
+          "previousStatus": "Recibido",
+          "newStatus": "En revisión",
+          "createdAt": "2026-11-07T22:30:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": "RC-20261109-D0000007",
+      "citizenId": "sample-citizen-ana",
+      "idempotencyKey": "demo-RC-20261109-D0000007",
+      "description": "Barandal del puente peatonal dañado.",
+      "category": "Infraestructura",
+      "community": "San Isidro Norte",
+      "locationReference": "Puente peatonal sobre la quebrada",
+      "createdAt": "2026-11-09T13:10:00.000Z",
+      "status": "Recibido",
+      "photos": [],
+      "demo": true,
+      "statusEvents": []
+    },
+    {
+      "id": "RC-20261110-D0000008",
+      "citizenId": "sample-citizen-luis",
+      "idempotencyKey": "demo-RC-20261110-D0000008",
+      "description": "Maleza alta y residuos en la zona verde comunal.",
+      "category": "Limpieza",
+      "community": "Urbanización El Mirador",
+      "locationReference": "Zona verde detrás de las casas",
+      "createdAt": "2026-11-10T08:25:00.000Z",
+      "status": "Recibido",
+      "photos": [],
+      "demo": true,
+      "statusEvents": []
+    },
+    {
+      "id": "RC-20261112-D0000009",
+      "citizenId": "sample-citizen-sofia",
+      "idempotencyKey": "demo-RC-20261112-D0000009",
+      "description": "Bancas de la plaza rotas y sin pintura.",
+      "category": "Espacios públicos",
+      "community": "Barrio Los Laureles",
+      "locationReference": "Plaza central, junto a la fuente",
+      "createdAt": "2026-11-12T15:45:00.000Z",
+      "status": "Recibido",
+      "photos": [],
+      "demo": true,
+      "statusEvents": []
+    },
+    {
+      "id": "RC-20261113-D0000010",
+      "citizenId": "sample-citizen-ana",
+      "idempotencyKey": "demo-RC-20261113-D0000010",
+      "description": "Aceras levantadas por las raíces de un árbol.",
+      "category": "Infraestructura",
+      "community": "Villa Esperanza",
+      "locationReference": "Calle 3, frente a la pulpería",
+      "createdAt": "2026-11-13T10:00:00.000Z",
+      "status": "Recibido",
+      "photos": [],
+      "demo": true,
+      "statusEvents": []
+    },
+    {
+      "id": "RC-20261114-D0000011",
+      "citizenId": "sample-citizen-luis",
+      "idempotencyKey": "demo-RC-20261114-D0000011",
+      "description": "Residuos voluminosos abandonados bajo el puente.",
+      "category": "Limpieza",
+      "community": "San Isidro Norte",
+      "locationReference": "Río seco, bajo el puente",
+      "createdAt": "2026-11-14T17:35:00.000Z",
+      "status": "Recibido",
+      "photos": [],
+      "demo": true,
+      "statusEvents": []
+    },
+    {
+      "id": "RC-20261115-D0000012",
+      "citizenId": "sample-citizen-sofia",
+      "idempotencyKey": "demo-RC-20261115-D0000012",
+      "description": "Señal de alto caída y sin visibilidad en el cruce.",
+      "category": "Infraestructura",
+      "community": "Urbanización El Mirador",
+      "locationReference": "Entrada principal de la urbanización",
+      "createdAt": "2026-11-15T12:50:00.000Z",
+      "status": "Recibido",
+      "photos": [],
+      "demo": true,
+      "statusEvents": []
+    }
+  ],
+  "notifications": [
+    {
+      "id": "d1d0ba8251cbab1c797921da7560cfeb",
+      "citizenId": "sample-citizen-ana",
+      "reportId": "RC-20261028-D0000001",
+      "eventId": "demo-event-RC-20261028-D0000001-1",
+      "newStatus": "En revisión",
+      "createdAt": "2026-10-28T17:05:00.000Z",
+      "url": "/ciudadano/reportes/RC-20261028-D0000001",
+      "readAt": null
+    },
+    {
+      "id": "54c300e3b7d81d85554908b2f8d9e233",
+      "citizenId": "sample-citizen-ana",
+      "reportId": "RC-20261028-D0000001",
+      "eventId": "demo-event-RC-20261028-D0000001-2",
+      "newStatus": "En proceso",
+      "createdAt": "2026-10-29T20:05:00.000Z",
+      "url": "/ciudadano/reportes/RC-20261028-D0000001",
+      "readAt": null
+    },
+    {
+      "id": "c1941b050c07095df2f3c7c769598b83",
+      "citizenId": "sample-citizen-ana",
+      "reportId": "RC-20261028-D0000001",
+      "eventId": "demo-event-RC-20261028-D0000001-3",
+      "newStatus": "Resuelto",
+      "createdAt": "2026-11-01T22:05:00.000Z",
+      "url": "/ciudadano/reportes/RC-20261028-D0000001",
+      "readAt": null
+    },
+    {
+      "id": "33420b57704ea83505d9f987940c5a91",
+      "citizenId": "sample-citizen-luis",
+      "reportId": "RC-20261030-D0000002",
+      "eventId": "demo-event-RC-20261030-D0000002-1",
+      "newStatus": "En revisión",
+      "createdAt": "2026-10-30T12:40:00.000Z",
+      "url": "/ciudadano/reportes/RC-20261030-D0000002",
+      "readAt": null
+    },
+    {
+      "id": "2bc1dbc92ad15c954b429af6c7aa86c6",
+      "citizenId": "sample-citizen-luis",
+      "reportId": "RC-20261030-D0000002",
+      "eventId": "demo-event-RC-20261030-D0000002-2",
+      "newStatus": "En proceso",
+      "createdAt": "2026-10-31T15:40:00.000Z",
+      "url": "/ciudadano/reportes/RC-20261030-D0000002",
+      "readAt": null
+    },
+    {
+      "id": "d292431a91bb70a43202e69537f6713e",
+      "citizenId": "sample-citizen-luis",
+      "reportId": "RC-20261030-D0000002",
+      "eventId": "demo-event-RC-20261030-D0000002-3",
+      "newStatus": "Resuelto",
+      "createdAt": "2026-11-03T17:40:00.000Z",
+      "url": "/ciudadano/reportes/RC-20261030-D0000002",
+      "readAt": null
+    },
+    {
+      "id": "b070004b42bbb23f7bfffe2c048a01ad",
+      "citizenId": "sample-citizen-sofia",
+      "reportId": "RC-20261102-D0000003",
+      "eventId": "demo-event-RC-20261102-D0000003-1",
+      "newStatus": "En revisión",
+      "createdAt": "2026-11-02T19:20:00.000Z",
+      "url": "/ciudadano/reportes/RC-20261102-D0000003",
+      "readAt": null
+    },
+    {
+      "id": "95eec2e92f80889a5ac59cda5f4ba64d",
+      "citizenId": "sample-citizen-sofia",
+      "reportId": "RC-20261102-D0000003",
+      "eventId": "demo-event-RC-20261102-D0000003-2",
+      "newStatus": "En proceso",
+      "createdAt": "2026-11-03T22:20:00.000Z",
+      "url": "/ciudadano/reportes/RC-20261102-D0000003",
+      "readAt": null
+    },
+    {
+      "id": "c260bed6b91789ad80fc8cacdccf13af",
+      "citizenId": "sample-citizen-ana",
+      "reportId": "RC-20261104-D0000004",
+      "eventId": "demo-event-RC-20261104-D0000004-1",
+      "newStatus": "En revisión",
+      "createdAt": "2026-11-04T14:15:00.000Z",
+      "url": "/ciudadano/reportes/RC-20261104-D0000004",
+      "readAt": null
+    },
+    {
+      "id": "010acedd193ab90e984dd92ebd77e8ff",
+      "citizenId": "sample-citizen-ana",
+      "reportId": "RC-20261104-D0000004",
+      "eventId": "demo-event-RC-20261104-D0000004-2",
+      "newStatus": "En proceso",
+      "createdAt": "2026-11-05T17:15:00.000Z",
+      "url": "/ciudadano/reportes/RC-20261104-D0000004",
+      "readAt": null
+    },
+    {
+      "id": "385561c4c52afcdc1da76808e9e2fa50",
+      "citizenId": "sample-citizen-luis",
+      "reportId": "RC-20261105-D0000005",
+      "eventId": "demo-event-RC-20261105-D0000005-1",
+      "newStatus": "En revisión",
+      "createdAt": "2026-11-05T10:55:00.000Z",
+      "url": "/ciudadano/reportes/RC-20261105-D0000005",
+      "readAt": null
+    },
+    {
+      "id": "db40a662d21955c5ef50f19f46121e2b",
+      "citizenId": "sample-citizen-sofia",
+      "reportId": "RC-20261107-D0000006",
+      "eventId": "demo-event-RC-20261107-D0000006-1",
+      "newStatus": "En revisión",
+      "createdAt": "2026-11-07T22:30:00.000Z",
+      "url": "/ciudadano/reportes/RC-20261107-D0000006",
+      "readAt": null
+    },
+    {
+      "id": "f7c981c159bfc73b4e21ace71f2b68c0",
+      "citizenId": "sample-citizen-ana",
+      "reportId": "RC-20261028-D0000001",
+      "eventId": "created",
+      "newStatus": "Recibido",
+      "createdAt": "2026-10-28T14:05:00.000Z",
+      "url": "/ciudadano/reportes/RC-20261028-D0000001",
+      "readAt": null
+    },
+    {
+      "id": "f19885dca0e0aa789cafd56f2040300d",
+      "citizenId": "sample-citizen-luis",
+      "reportId": "RC-20261030-D0000002",
+      "eventId": "created",
+      "newStatus": "Recibido",
+      "createdAt": "2026-10-30T09:40:00.000Z",
+      "url": "/ciudadano/reportes/RC-20261030-D0000002",
+      "readAt": null
+    },
+    {
+      "id": "f3bed799579ea1cccbe94431d5eb950a",
+      "citizenId": "sample-citizen-sofia",
+      "reportId": "RC-20261102-D0000003",
+      "eventId": "created",
+      "newStatus": "Recibido",
+      "createdAt": "2026-11-02T16:20:00.000Z",
+      "url": "/ciudadano/reportes/RC-20261102-D0000003",
+      "readAt": null
+    },
+    {
+      "id": "5b31de3f1347b7c97e2ee597ded27e33",
+      "citizenId": "sample-citizen-ana",
+      "reportId": "RC-20261104-D0000004",
+      "eventId": "created",
+      "newStatus": "Recibido",
+      "createdAt": "2026-11-04T11:15:00.000Z",
+      "url": "/ciudadano/reportes/RC-20261104-D0000004",
+      "readAt": null
+    },
+    {
+      "id": "c1b702d02b2d3ed03f65a697b539cba1",
+      "citizenId": "sample-citizen-luis",
+      "reportId": "RC-20261105-D0000005",
+      "eventId": "created",
+      "newStatus": "Recibido",
+      "createdAt": "2026-11-05T07:55:00.000Z",
+      "url": "/ciudadano/reportes/RC-20261105-D0000005",
+      "readAt": null
+    },
+    {
+      "id": "c3eb3442ba9ff7eb81c61736df67d95b",
+      "citizenId": "sample-citizen-sofia",
+      "reportId": "RC-20261107-D0000006",
+      "eventId": "created",
+      "newStatus": "Recibido",
+      "createdAt": "2026-11-07T19:30:00.000Z",
+      "url": "/ciudadano/reportes/RC-20261107-D0000006",
+      "readAt": null
+    },
+    {
+      "id": "a96bb890c28f650a8ed42bf384107aa3",
+      "citizenId": "sample-citizen-ana",
+      "reportId": "RC-20261109-D0000007",
+      "eventId": "created",
+      "newStatus": "Recibido",
+      "createdAt": "2026-11-09T13:10:00.000Z",
+      "url": "/ciudadano/reportes/RC-20261109-D0000007",
+      "readAt": null
+    },
+    {
+      "id": "cfa8a1502820ecac46886862a44f83ed",
+      "citizenId": "sample-citizen-luis",
+      "reportId": "RC-20261110-D0000008",
+      "eventId": "created",
+      "newStatus": "Recibido",
+      "createdAt": "2026-11-10T08:25:00.000Z",
+      "url": "/ciudadano/reportes/RC-20261110-D0000008",
+      "readAt": null
+    },
+    {
+      "id": "391114c01a0cf5b57cf02de3ae315d11",
+      "citizenId": "sample-citizen-sofia",
+      "reportId": "RC-20261112-D0000009",
+      "eventId": "created",
+      "newStatus": "Recibido",
+      "createdAt": "2026-11-12T15:45:00.000Z",
+      "url": "/ciudadano/reportes/RC-20261112-D0000009",
+      "readAt": null
+    },
+    {
+      "id": "fb721dc1db7c1e59068d330a1d3d9f92",
+      "citizenId": "sample-citizen-ana",
+      "reportId": "RC-20261113-D0000010",
+      "eventId": "created",
+      "newStatus": "Recibido",
+      "createdAt": "2026-11-13T10:00:00.000Z",
+      "url": "/ciudadano/reportes/RC-20261113-D0000010",
+      "readAt": null
+    },
+    {
+      "id": "6f2f573488530f94667821643f3bf9e4",
+      "citizenId": "sample-citizen-luis",
+      "reportId": "RC-20261114-D0000011",
+      "eventId": "created",
+      "newStatus": "Recibido",
+      "createdAt": "2026-11-14T17:35:00.000Z",
+      "url": "/ciudadano/reportes/RC-20261114-D0000011",
+      "readAt": null
+    },
+    {
+      "id": "fe6b8ad7cac464e39ef15849d9d6d869",
+      "citizenId": "sample-citizen-sofia",
+      "reportId": "RC-20261115-D0000012",
+      "eventId": "created",
+      "newStatus": "Recibido",
+      "createdAt": "2026-11-15T12:50:00.000Z",
+      "url": "/ciudadano/reportes/RC-20261115-D0000012",
+      "readAt": null
+    }
+  ]
+}

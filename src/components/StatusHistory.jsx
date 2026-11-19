@@ -1,4 +1,5 @@
 import { useId } from 'react'
+import Icon from './Icon.jsx'
 
 const DATE_FORMATTER = new Intl.DateTimeFormat('es-CR', {
   dateStyle: 'medium',
@@ -43,7 +44,7 @@ export default function StatusHistory({ history = [], reportId }) {
                   <>
                     <span className="visually-hidden">Estado anterior: </span>
                     <StatusPill status={entry.previousStatus} />
-                    <span aria-hidden="true">→</span>
+                    <Icon name="arrowRight" />
                     <span className="visually-hidden">Estado nuevo: </span>
                   </>
                 )}

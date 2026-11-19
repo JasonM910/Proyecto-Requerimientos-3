@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { MAX_PHOTOS, photoValidationError } from '../../shared/photoRules.js'
+import CameraCapture from './CameraCapture.jsx'
 
 function readPhoto(file) {
   return new Promise((resolve, reject) => {
@@ -26,15 +27,26 @@ export default function PhotoPicker({ photos, onChange, disabled, onBusyChange }
   const [isReading, setIsReading] = useState(false)
   const readLock = useRef(false)
   const inputRef = useRef(null)
+  const busy = useRef({ reading: false, camera: false })
+  const [cameraActive, setCameraActive] = useState(false)
+
+  function updateBusy(channel, value) {
+    busy.current[channel] = value
+    onBusyChange(busy.current.reading || busy.current.camera)
+  }
 
   async function selectPhotos(event) {
     const files = Array.from(event.target.files ?? [])
     event.target.value = ''
+    await addFiles(files)
+  }
+
+  async function addFiles(files) {
     if (disabled || readLock.current || files.length === 0) return
 
     readLock.current = true
     setIsReading(true)
-    onBusyChange(true)
+    updateBusy('reading', true)
     const nextPhotos = [...photos]
     const nextMessages = []
     try {
@@ -64,7 +76,7 @@ export default function PhotoPicker({ photos, onChange, disabled, onBusyChange }
     } finally {
       readLock.current = false
       setIsReading(false)
-      onBusyChange(false)
+      updateBusy('reading', false)
     }
   }
 
@@ -83,6 +95,14 @@ export default function PhotoPicker({ photos, onChange, disabled, onBusyChange }
           <p>Revisá las imágenes y retirá las que no querás enviar.</p>
         </div>
       </div>
+      <CameraCapture
+        disabled={disabled || isReading || photos.length >= MAX_PHOTOS}
+        onCapture={(file) => addFiles([file])}
+        onActiveChange={(active) => {
+          setCameraActive(active)
+          updateBusy('camera', active)
+        }}
+      />
       <div className="form-field photo-upload">
         <label htmlFor="report-photos">Agregar fotografías</label>
         <input
@@ -91,7 +111,7 @@ export default function PhotoPicker({ photos, onChange, disabled, onBusyChange }
           type="file"
           accept="image/jpeg,image/png"
           multiple
-          disabled={disabled || isReading}
+          disabled={disabled || isReading || cameraActive}
           onChange={selectPhotos}
           aria-describedby="photos-hint photos-count"
         />
@@ -109,11 +129,9 @@ export default function PhotoPicker({ photos, onChange, disabled, onBusyChange }
         <ul className="photo-grid photo-preview" aria-label="Fotografías seleccionadas">
           {photos.map((photo, index) => (
             <li className="photo-card" key={photo.id}>
-              <img src={photo.dataUrl} alt={`Fotografía seleccionada ${index + 1}: ${photo.name}`} />
+              <img src={photo.dataUrl} alt={`Fotografía seleccionada ${index + 1}`} />
               <div className="photo-card-copy">
-                <span className="photo-name" title={photo.name}>{photo.name}</span>
-                <span className="field-hint">{(photo.size / (1024 * 1024)).toFixed(2)} MB</span>
-                <button className="button button-outline photo-remove" type="button" disabled={disabled || isReading} onClick={() => removePhoto(photo.id)} aria-label={`Retirar ${photo.name}`}>
+                <button className="button button-outline photo-remove" type="button" disabled={disabled || isReading || cameraActive} onClick={() => removePhoto(photo.id)} aria-label={`Retirar fotografía ${index + 1}`}>
                   Retirar fotografía
                 </button>
               </div>

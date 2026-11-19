@@ -3,6 +3,10 @@ import { AppHeader } from './Dashboard.jsx'
 import PhotoPicker from './PhotoPicker.jsx'
 import EvidenceGallery from './EvidenceGallery.jsx'
 import StatusHistory from './StatusHistory.jsx'
+import AudioRecorder from './AudioRecorder.jsx'
+import LocationPicker from './LocationPicker.jsx'
+import ReportCaptureDetails from './ReportCaptureDetails.jsx'
+import Icon from './Icon.jsx'
 import { REPORT_CATEGORIES as CATEGORIES } from '../../shared/reportRules.js'
 import {
   createCitizenReport,
@@ -57,7 +61,7 @@ function CitizenLayout({ user, onNavigate, onSignOut, children }) {
 function PageBackLink({ label, onClick }) {
   return (
     <button className="back-link" type="button" onClick={onClick}>
-      <span aria-hidden="true">←</span> {label}
+      <Icon name="arrowLeft" />{label}
     </button>
   )
 }
@@ -118,6 +122,10 @@ function ReportForm({ user, onNavigate, onSignOut }) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [createdReport, setCreatedReport] = useState(null)
   const [photos, setPhotos] = useState([])
+  const [audio, setAudio] = useState(null)
+  const [location, setLocation] = useState(null)
+  const [isRecordingAudio, setIsRecordingAudio] = useState(false)
+  const audioLock = useRef(false)
   const [isReadingPhotos, setIsReadingPhotos] = useState(false)
   const photoReadLock = useRef(false)
   const submissionLock = useRef(false)
@@ -133,21 +141,21 @@ function ReportForm({ user, onNavigate, onSignOut }) {
 
   async function handleSubmit(event) {
     event.preventDefault()
-    if (submissionLock.current || photoReadLock.current) {
+    if (submissionLock.current || photoReadLock.current || audioLock.current) {
       return
     }
 
     const nextErrors = {}
-    if (!values.description.trim()) {
-      nextErrors.description = 'Escribí una descripción del problema.'
+    if (!values.description.trim() && !audio) {
+      nextErrors.description = 'Grabá una nota de voz o escribí una descripción del problema.'
     }
     if (!values.category) {
       nextErrors.category = 'Seleccioná una categoría.'
     }
-    if (!values.community.trim()) {
+    if (!values.community.trim() && !location) {
       nextErrors.community = 'Ingresá la comunidad o localidad.'
     }
-    if (!values.locationReference.trim()) {
+    if (!values.locationReference.trim() && !location) {
       nextErrors.locationReference = 'Ingresá una referencia del sitio.'
     }
 
@@ -166,6 +174,8 @@ function ReportForm({ user, onNavigate, onSignOut }) {
           category: values.category,
           community: values.community.trim(),
           locationReference: values.locationReference.trim(),
+          ...(location ? { location } : {}),
+          ...(audio ? { audio: { type: audio.type, durationSeconds: audio.durationSeconds, data: audio.dataUrl.split(',')[1] } } : {}),
           photos: photos.map((photo) => ({
             name: photo.name,
             type: photo.type,
@@ -176,6 +186,8 @@ function ReportForm({ user, onNavigate, onSignOut }) {
       )
       setCreatedReport(report)
       setPhotos([])
+      setAudio(null)
+      setLocation(null)
     } catch (error) {
       setFormError(
         error instanceof Error
@@ -199,6 +211,8 @@ function ReportForm({ user, onNavigate, onSignOut }) {
     setFormError('')
     setCreatedReport(null)
     setPhotos([])
+    setAudio(null)
+    setLocation(null)
     idempotencyKey.current = newIdempotencyKey()
   }
 
@@ -217,7 +231,7 @@ function ReportForm({ user, onNavigate, onSignOut }) {
         </div>
         <section className="report-confirmation" aria-labelledby="confirmation-title">
           <span className="confirmation-check" aria-hidden="true">
-            ✓
+            <Icon name="check" />
           </span>
           <span className="eyebrow">Envío completado</span>
           <h1 id="confirmation-title">Tu reporte fue recibido</h1>
@@ -278,8 +292,7 @@ function ReportForm({ user, onNavigate, onSignOut }) {
         <span className="eyebrow">Nuevo reporte ciudadano</span>
         <h1>Contanos qué sucede</h1>
         <p>
-          Describí el problema y dónde ocurre. Revisá la información antes de
-          enviarla.
+          Contalo con tu voz, indicá dónde sucede y tomá una foto. Revisá y enviá.
         </p>
       </div>
 
@@ -300,13 +313,23 @@ function ReportForm({ user, onNavigate, onSignOut }) {
               </div>
             </div>
 
+            <AudioRecorder
+              value={audio}
+              disabled={isSubmitting}
+              onChange={(recording) => {
+                setAudio(recording)
+                setErrors((current) => ({ ...current, description: '' }))
+              }}
+              onBusyChange={(busy) => { audioLock.current = busy; setIsRecordingAudio(busy) }}
+            />
+
             <div className="form-field">
               <label htmlFor="description">Descripción del problema</label>
               <textarea
                 autoComplete="off"
                 id="description"
                 name="description"
-                rows="5"
+                rows="3"
                 value={values.description}
                 onChange={updateField}
                 aria-invalid={Boolean(errors.description)}
@@ -316,10 +339,10 @@ function ReportForm({ user, onNavigate, onSignOut }) {
                     : 'description-hint'
                 }
                 placeholder="Por ejemplo: Hay un bache grande en la calle que dificulta el paso de los vehículos."
-                required
+                required={!audio}
               />
               <span className="field-hint" id="description-hint">
-                Describí qué ocurre y cómo afecta a las personas.
+                Si grabaste un audio, escribir es opcional. También podés usar solo texto.
               </span>
               <FormFieldError id="description-error">
                 {errors.description}
@@ -375,6 +398,16 @@ function ReportForm({ user, onNavigate, onSignOut }) {
               </div>
             </div>
 
+            <LocationPicker
+              point={location}
+              disabled={isSubmitting}
+              hasErrors={Boolean(errors.community || errors.locationReference)}
+              onChange={(point) => {
+                if (submissionLock.current) return
+                setLocation(point)
+                setErrors((current) => ({ ...current, community: '', locationReference: '' }))
+              }}
+            >
             <div className="form-field">
               <label htmlFor="community">Comunidad o localidad</label>
               <input
@@ -387,7 +420,7 @@ function ReportForm({ user, onNavigate, onSignOut }) {
                 aria-invalid={Boolean(errors.community)}
                 aria-describedby={errors.community ? 'community-error' : undefined}
                 placeholder="Ej.: San Rafael"
-                required
+                required={!location}
               />
               <FormFieldError id="community-error">
                 {errors.community}
@@ -410,7 +443,7 @@ function ReportForm({ user, onNavigate, onSignOut }) {
                     : 'location-reference-hint'
                 }
                 placeholder="Ej.: Frente a la escuela, 100 m al norte"
-                required
+                required={!location}
               />
               <span className="field-hint" id="location-reference-hint">
                 Agregá una referencia fácil de reconocer.
@@ -419,6 +452,7 @@ function ReportForm({ user, onNavigate, onSignOut }) {
                 {errors.locationReference}
               </FormFieldError>
             </div>
+            </LocationPicker>
           </section>
 
           <PhotoPicker
@@ -436,10 +470,10 @@ function ReportForm({ user, onNavigate, onSignOut }) {
             <button
               className="button button-primary report-submit"
               type="submit"
-              disabled={isSubmitting || isReadingPhotos}
+              disabled={isSubmitting || isReadingPhotos || isRecordingAudio}
             >
               {isSubmitting ? 'Enviando reporte…' : 'Enviar reporte'}
-              {!isSubmitting && <span aria-hidden="true">→</span>}
+              {!isSubmitting && <Icon name="arrowRight" />}
             </button>
           </div>
         </form>
@@ -447,16 +481,16 @@ function ReportForm({ user, onNavigate, onSignOut }) {
         <aside className="report-sidebar">
           <section className="report-tip-card">
             <span className="tip-icon" aria-hidden="true">
-              i
+              <Icon name="info" />
             </span>
             <h2>Un buen reporte ayuda a actuar</h2>
             <p>
-              Una descripción clara y una referencia precisa facilitan que la
-              municipalidad identifique el lugar y comprenda el problema.
+              Una nota de voz o un texto claro, la ubicación y las fotografías
+              ayudan a comprender el problema y encontrar el lugar.
             </p>
           </section>
           <section className="report-photo-note">
-            <span aria-hidden="true">◇</span>
+            <span aria-hidden="true"><Icon name="photo" /></span>
             <p>
               Las fotografías son opcionales. Podés adjuntar hasta tres para
               ayudar a comprender el problema, o enviar el reporte sin ellas.
@@ -520,7 +554,7 @@ function ReportList({ user, onNavigate, onSignOut }) {
             type="button"
             onClick={() => onNavigate('/ciudadano/reportes/nuevo')}
           >
-            <span aria-hidden="true">+</span> Crear reporte
+            <Icon name="plus" />Crear reporte
           </button>
         </div>
       </div>
@@ -602,7 +636,7 @@ function ReportList({ user, onNavigate, onSignOut }) {
                 </span>
                 <span className="report-status" data-status={report.status}>{report.status}</span>
                 <span className="report-list-arrow" aria-hidden="true">
-                  →
+                  <Icon name="arrowRight" />
                 </span>
               </button>
             ))}
@@ -690,7 +724,7 @@ function ReportDetail({ reportId, user, onNavigate, onSignOut }) {
           <dl className="report-detail-grid">
             <div className="report-detail-description">
               <dt>Descripción del problema</dt>
-              <dd>{report.description}</dd>
+              <dd>{report.description || 'Descripción mediante nota de voz.'}</dd>
             </div>
             <div>
               <dt>Categoría</dt>
@@ -716,6 +750,7 @@ function ReportDetail({ reportId, user, onNavigate, onSignOut }) {
             </div>
           </dl>
 
+          <ReportCaptureDetails report={report} />
           <EvidenceGallery photos={report.photos} />
 
           <StatusHistory history={report.history} reportId={report.id} />

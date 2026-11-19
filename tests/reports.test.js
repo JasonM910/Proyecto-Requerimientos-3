@@ -720,7 +720,7 @@ test('HU-07 admite tres fotos de 5 MiB y rechaza una solicitud que exceda el lí
   const oversized = await citizen.request('/api/reports', {
     method: 'POST',
     headers: { 'Idempotency-Key': 'evidence-total-too-big-0001' },
-    body: { ...EVIDENCE_REPORT, description: 'x'.repeat(32 * 1024), photos },
+    body: { ...EVIDENCE_REPORT, description: 'x'.repeat(7 * 1024 * 1024), photos },
   })
   assert.equal(oversized.status, 413)
   assert.equal((await citizen.request('/api/reports')).body.reports.length, 1)

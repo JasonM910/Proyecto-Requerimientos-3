@@ -5,13 +5,15 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { MAX_PHOTOS, MAX_PHOTO_BYTES, PHOTO_TYPES, photoValidationError } from '../shared/photoRules.js'
 import { REPORT_CATEGORIES as CATEGORY_LIST, REPORT_STATUSES } from '../shared/reportRules.js'
-import { createDemoReports, createDemoStatusEvents } from './demoData.js'
+import { createDemoReports, createDemoStatusEvents, DEMO_CITIZEN_ACCOUNTS, DEMO_CITIZEN_ID } from './demoData.js'
+import { AUDIO_TYPES, MAX_AUDIO_BYTES, MAX_AUDIO_SECONDS, validLocation } from '../shared/captureRules.js'
 
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const DATA_DIR = path.join(ROOT_DIR, 'data')
+const SHARED_DATABASE_PATH = path.join(DATA_DIR, 'database.json')
 const DATABASE_PATH = path.resolve(
   process.env.REPORTE_CIUDADANO_DATABASE_PATH ??
-    path.join(DATA_DIR, 'database.json'),
+    path.join(DATA_DIR, 'database.local.json'),
 )
 const DIST_DIR = path.join(ROOT_DIR, 'dist')
 const SESSION_COOKIE = 'reporte_ciudadano_session'
@@ -19,8 +21,8 @@ const SESSION_MAX_AGE_SECONDS = 60 * 60 * 8
 const PASSWORD_ITERATIONS = 120_000
 const PASSWORD_BYTES = 32
 const MAX_REQUEST_BYTES = 16 * 1024
-// Tres imágenes de 5 MiB codificadas en base64, más los campos del reporte.
-const MAX_REPORT_REQUEST_BYTES = MAX_PHOTOS * Math.ceil(MAX_PHOTO_BYTES / 3) * 4 + MAX_REQUEST_BYTES
+// Tres imágenes y una grabación de hasta 5 MiB cada una, más los campos.
+const MAX_REPORT_REQUEST_BYTES = (MAX_PHOTOS * Math.ceil(MAX_PHOTO_BYTES / 3) + Math.ceil(MAX_AUDIO_BYTES / 3)) * 4 + MAX_REQUEST_BYTES
 const DATABASE_VERSION = 3
 const REPORT_CATEGORIES = new Set(CATEGORY_LIST)
 const REPORT_STATUS_SET = new Set(REPORT_STATUSES)
@@ -114,7 +116,7 @@ async function readDatabase() {
   } catch (error) {
     if (error.code === 'ENOENT') {
       throw new Error(
-        'No se encontró data/database.json. Reiniciá el servidor para crear la base de datos.',
+        'No se encontró la base de datos. Reiniciá el servidor para crearla.',
         { cause: error },
       )
     }
@@ -125,7 +127,7 @@ async function readDatabase() {
   try {
     return validateDatabase(JSON.parse(content))
   } catch (error) {
-    throw new Error(`No se pudo leer data/database.json: ${error.message}`, {
+    throw new Error(`No se pudo leer la base de datos: ${error.message}`, {
       cause: error,
     })
   }
@@ -162,13 +164,24 @@ async function initializeDatabase() {
   try {
     await readDatabase()
   } catch (error) {
-    if (!error.message.startsWith('No se encontró data/database.json.')) {
+    if (!error.message.startsWith('No se encontró la base de datos.')) {
       throw error
     }
 
+    let initialDatabase = createEmptyDatabase()
+    // La instantánea versionada solo se importa en el primer inicio local.
+    // Una ruta explícita permite bases aisladas y pruebas sin datos compartidos.
+    if (!process.env.REPORTE_CIUDADANO_DATABASE_PATH && DEMO_DATA_ENABLED) {
+      try {
+        initialDatabase = validateDatabase(JSON.parse(await readFile(SHARED_DATABASE_PATH, 'utf8')))
+        initialDatabase.sessions = []
+      } catch (snapshotError) {
+        if (snapshotError.code !== 'ENOENT') throw snapshotError
+      }
+    }
     await writeFile(
       DATABASE_PATH,
-      `${JSON.stringify(createEmptyDatabase(), null, 2)}\n`,
+      `${JSON.stringify(initialDatabase, null, 2)}\n`,
       { encoding: 'utf8', flag: 'wx' },
     )
   }
@@ -185,10 +198,38 @@ async function initializeDatabase() {
     const existing = database.accounts.find(
       (account) => account.email === DEMO_MUNICIPAL_ACCOUNT.email,
     )
-    const needsDemoReports =
-      DEMO_DATA_ENABLED && !database.reports.some((report) => report.demo === true)
-    if (needsDemoReports) {
-      database.reports.push(...createDemoReports())
+    let needsDemoAccounts = false
+    if (DEMO_DATA_ENABLED) {
+      for (const sample of DEMO_CITIZEN_ACCOUNTS) {
+        if (database.accounts.some((account) => account.id === sample.id || account.email === sample.email)) continue
+        const salt = randomBytes(16)
+        const passwordHash = await derivePasswordHash(sample.password, salt)
+        database.accounts.push({
+          id: sample.id, name: sample.name, email: sample.email, role: 'citizen',
+          salt: salt.toString('hex'), passwordHash: passwordHash.toString('hex'),
+          demoPassword: sample.password, demo: true, createdAt: new Date().toISOString(),
+        })
+        needsDemoAccounts = true
+      }
+    }
+    const templates = createDemoReports()
+    const missing = DEMO_DATA_ENABLED ? templates.filter((sample) => !database.reports.some((report) => report.id === sample.id)) : []
+    const needsDemoReports = missing.length > 0
+    database.reports.push(...missing)
+    let needsDemoLinks = false
+    if (DEMO_DATA_ENABLED) {
+      const templateById = new Map(templates.map((sample) => [sample.id, sample]))
+      for (const report of database.reports) {
+        const template = templateById.get(report.id)
+        if (report.demo !== true || !template || !database.accounts.some((account) => account.id === template.citizenId && account.role === 'citizen')) continue
+        if (report.citizenId === DEMO_CITIZEN_ID) {
+          report.citizenId = template.citizenId
+          for (const notice of database.notifications) {
+            if (notice.reportId === report.id && notice.citizenId === DEMO_CITIZEN_ID) notice.citizenId = report.citizenId
+          }
+          needsDemoLinks = true
+        }
+      }
     }
     // HU-13: los reportes ficticios sembrados antes del historial reciben los
     // cambios de estado que explican su estado actual.
@@ -197,6 +238,20 @@ async function initializeDatabase() {
       if (report.demo === true && !Array.isArray(report.statusEvents)) {
         report.statusEvents = createDemoStatusEvents(report)
         needsDemoHistory = true
+      }
+    }
+    // Los avisos de ejemplo corresponden exactamente a los eventos existentes.
+    const notifiedEvents = new Set(database.notifications.map((notice) => JSON.stringify([notice.citizenId, notice.reportId, notice.eventId])))
+    if (DEMO_DATA_ENABLED) {
+      for (const report of database.reports) {
+        if (report.demo !== true || !DEMO_CITIZEN_ACCOUNTS.some((sample) => sample.id === report.citizenId)) continue
+        for (const event of report.statusEvents ?? []) {
+          const eventKey = JSON.stringify([report.citizenId, report.id, event.id])
+          if (notifiedEvents.has(eventKey)) continue
+          database.notifications.push(statusNotification(report, event))
+          notifiedEvents.add(eventKey)
+          needsDemoLinks = true
+        }
       }
     }
     // HU-14: completa solo recepciones de reportes con un autor ciudadano real.
@@ -214,7 +269,7 @@ async function initializeDatabase() {
         needsReceipts = true
       }
     }
-    if (existing && !needsMigration && !needsDemoReports && !needsDemoHistory && !needsReceipts) {
+    if (existing && !needsMigration && !needsDemoAccounts && !needsDemoReports && !needsDemoHistory && !needsDemoLinks && !needsReceipts) {
       return { changed: false }
     }
 
@@ -327,6 +382,15 @@ function receiptNotification(report) {
   }
 }
 
+function statusNotification(report, event) {
+  return {
+    id: randomBytes(16).toString('hex'), citizenId: report.citizenId,
+    reportId: report.id, eventId: event.id, newStatus: event.newStatus,
+    createdAt: event.createdAt,
+    url: `/ciudadano/reportes/${encodeURIComponent(report.id)}`, readAt: null,
+  }
+}
+
 function publicNotification(notification) {
   return {
     id: notification.id,
@@ -351,7 +415,64 @@ function publicReport(report) {
     status: report.status,
     photos: (report.photos ?? []).map((photo) => publicPhoto(report.id, photo)),
     history: reportHistory(report),
+    ...reportCapture(report),
   }
+}
+
+function reportCapture(report) {
+  return {
+    ...(report.location ? { location: report.location } : {}),
+    ...(report.audio ? { audio: {
+      type: report.audio.type,
+      size: report.audio.size,
+      durationSeconds: report.audio.durationSeconds,
+      url: `/api/reports/${encodeURIComponent(report.id)}/audio`,
+    } } : {}),
+  }
+}
+
+function validateAudio(audio) {
+  if (audio == null) return null
+  const type = typeof audio.type === 'string' ? audio.type.split(';')[0].trim() : ''
+  if (!AUDIO_TYPES.includes(type)) throw new HttpError(400, 'La grabación debe ser un audio WebM, MP4 u Ogg.')
+  if (typeof audio.durationSeconds !== 'number' || !Number.isFinite(audio.durationSeconds) || audio.durationSeconds <= 0 || audio.durationSeconds > MAX_AUDIO_SECONDS) {
+    throw new HttpError(400, 'La grabación debe durar entre un instante y dos minutos.')
+  }
+  if (typeof audio.data !== 'string' || !audio.data.length || audio.data.length > Math.ceil(MAX_AUDIO_BYTES / 3) * 4) {
+    throw new HttpError(400, 'La grabación está vacía o supera el máximo de 5 MB.')
+  }
+  const bytes = Buffer.from(audio.data, 'base64')
+  if (bytes.length > MAX_AUDIO_BYTES || bytes.toString('base64') !== audio.data) throw new HttpError(400, 'La grabación supera los 5 MB o no tiene una codificación válida.')
+  const matches = type === 'audio/webm' ? bytes.subarray(0, 4).equals(Buffer.from('1a45dfa3', 'hex'))
+    : type === 'audio/ogg' ? bytes.subarray(0, 4).toString() === 'OggS'
+      : bytes.subarray(4, 8).toString() === 'ftyp'
+  if (!matches) throw new HttpError(400, 'El contenido no corresponde al formato de la grabación.')
+  return { type, durationSeconds: audio.durationSeconds, size: bytes.length, data: audio.data }
+}
+
+function sendAudio(request, response, audio) {
+  const bytes = Buffer.from(audio.data, 'base64')
+  const headers = {
+    'Content-Type': audio.type,
+    'Cache-Control': 'no-store',
+    'Accept-Ranges': 'bytes',
+    'X-Content-Type-Options': 'nosniff',
+    'Cross-Origin-Resource-Policy': 'same-origin',
+  }
+  if (!request.headers.range) {
+    response.writeHead(200, { ...headers, 'Content-Length': bytes.length })
+    response.end(bytes)
+    return
+  }
+  const match = /^bytes=(\d*)-(\d*)$/.exec(request.headers.range)
+  const start = match?.[1] ? Number(match[1]) : Math.max(0, bytes.length - Number(match?.[2]))
+  const end = match?.[1] && match[2] ? Math.min(bytes.length - 1, Number(match[2])) : bytes.length - 1
+  if (!match || (!match[1] && !match[2]) || !Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end || start >= bytes.length) {
+    response.writeHead(416, { ...headers, 'Content-Range': `bytes */${bytes.length}` }).end()
+    return
+  }
+  response.writeHead(206, { ...headers, 'Content-Length': end - start + 1, 'Content-Range': `bytes ${start}-${end}/${bytes.length}` })
+  response.end(bytes.subarray(start, end + 1))
 }
 
 function publicPhoto(reportId, photo) {
@@ -515,6 +636,7 @@ function municipalReportDetail(report) {
     status: report.status,
     photos: (report.photos ?? []).map((photo) => publicPhoto(report.id, photo)),
     history: reportHistory(report),
+    ...reportCapture(report),
   }
 }
 
@@ -546,16 +668,7 @@ function applyMunicipalUpdate(database, report, field, value, expected, account,
     }
     report.statusEvents ??= []
     report.statusEvents.push(event)
-    database.notifications.push({
-      id: randomBytes(16).toString('hex'),
-      citizenId: report.citizenId,
-      reportId: report.id,
-      eventId: event.id,
-      newStatus: value,
-      createdAt,
-      url: `/ciudadano/reportes/${encodeURIComponent(report.id)}`,
-      readAt: null,
-    })
+    database.notifications.push(statusNotification(report, event))
   }
   report[field] = value
   report.municipalOperations ??= []
@@ -780,6 +893,9 @@ async function handleApiRequest(request, response, pathname) {
   if (pathname === '/api/reports' && request.method === 'POST') {
     const account = await requireCitizen(request)
     const body = await readJsonBody(request, MAX_REPORT_REQUEST_BYTES)
+    const audio = validateAudio(body.audio)
+    const location = body.location == null ? null : body.location
+    if (location !== null && !validLocation(location)) throw new HttpError(400, 'Seleccioná una ubicación válida en el mapa.')
     const description =
       typeof body.description === 'string' ? body.description.trim() : ''
     const category = typeof body.category === 'string' ? body.category : ''
@@ -791,16 +907,16 @@ async function handleApiRequest(request, response, pathname) {
         : ''
     const idempotencyKey = request.headers['idempotency-key']
 
-    if (!description) {
-      throw new HttpError(400, 'Escribí una descripción del problema.')
+    if (!description && !audio) {
+      throw new HttpError(400, 'Escribí una descripción del problema o grabá una nota de voz.')
     }
     if (!REPORT_CATEGORIES.has(category)) {
       throw new HttpError(400, 'Seleccioná una categoría para el reporte.')
     }
-    if (!community) {
+    if (!community && !location) {
       throw new HttpError(400, 'Ingresá la comunidad o localidad.')
     }
-    if (!locationReference) {
+    if (!locationReference && !location) {
       throw new HttpError(400, 'Ingresá una referencia para ubicar el problema.')
     }
     if (
@@ -840,11 +956,17 @@ async function handleApiRequest(request, response, pathname) {
         idempotencyKey,
         description,
         category,
-        community,
-        locationReference,
+        community: community || 'Ubicación en el mapa',
+        locationReference: locationReference || `Coordenadas: ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`,
         createdAt: now.toISOString(),
         status: 'Recibido',
         photos,
+        ...(audio ? { audio } : {}),
+        ...(location ? { location: {
+          latitude: location.latitude,
+          longitude: location.longitude,
+          ...(location.accuracy === undefined ? {} : { accuracy: location.accuracy }),
+        } } : {}),
       }
       database.reports.push(report)
       database.notifications.push(receiptNotification(report))
@@ -1020,6 +1142,16 @@ async function handleApiRequest(request, response, pathname) {
     return
   }
 
+  const audioMatch = pathname.match(/^\/api\/reports\/([^/]+)\/audio$/)
+  if (audioMatch && request.method === 'GET') {
+    let reportId
+    try { reportId = decodeURIComponent(audioMatch[1]) } catch { throw new HttpError(404, 'No se encontró ese reporte.') }
+    const report = await findAccessibleReport(request, reportId)
+    if (!report.audio) throw new HttpError(404, 'Este reporte no tiene una grabación de voz.')
+    sendAudio(request, response, report.audio)
+    return
+  }
+
   // Evidencias: las fotografías las pueden consultar su dueño y el personal municipal.
   const photosMatch = pathname.match(/^\/api\/reports\/([^/]+)\/photos(?:\/([^/]+))?$/)
   if (photosMatch && request.method === 'GET') {
@@ -1137,7 +1269,7 @@ async function handleRequest(request, response) {
 
       console.error('Error al procesar la base de datos JSON:', error)
       sendJson(response, 500, {
-        error: 'No se pudo completar la operación. Revisá data/database.json.',
+        error: 'No se pudo guardar la información. Intentá nuevamente en unos momentos.',
       })
     }
     return
@@ -1165,6 +1297,10 @@ async function handleRequest(request, response) {
 
 async function startServer() {
   await initializeDatabase()
+  if (process.argv.includes('--seed-only')) {
+    console.log('Cuentas y reportes de ejemplo disponibles.')
+    return
+  }
   const server = createServer((request, response) => {
     void handleRequest(request, response)
   })

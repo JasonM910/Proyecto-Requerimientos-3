@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AppHeader } from './Dashboard.jsx'
 import { getMunicipalReports } from '../services/reportService.js'
 import { REPORT_CATEGORIES, REPORT_STATUSES } from '../../shared/reportRules.js'
+import Icon from './Icon.jsx'
 
 const DATE_FORMATTER = new Intl.DateTimeFormat('es-CR', {
   dateStyle: 'medium',
@@ -83,7 +84,7 @@ export default function MunicipalInbox({ user, onNavigate, onSignOut, filters, o
           <h1>Bandeja de reportes</h1>
           <p>
             Consultá los reportes recibidos y filtralos por categoría o estado
-            para organizar su revisión. Los datos son ficticios.
+            para organizar su atención.
           </p>
         </div>
 
@@ -238,7 +239,7 @@ export default function MunicipalInbox({ user, onNavigate, onSignOut, filters, o
                             )
                           }}
                         >
-                          Ver detalle <span aria-hidden="true">→</span>
+                          Ver detalle <Icon name="arrowRight" />
                         </a>
                       </td>
                     </tr>

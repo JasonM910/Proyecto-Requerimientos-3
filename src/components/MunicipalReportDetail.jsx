@@ -3,6 +3,8 @@ import { AppHeader } from './Dashboard.jsx'
 import EvidenceGallery from './EvidenceGallery.jsx'
 import MunicipalReportActions from './MunicipalReportActions.jsx'
 import StatusHistory from './StatusHistory.jsx'
+import ReportCaptureDetails from './ReportCaptureDetails.jsx'
+import Icon from './Icon.jsx'
 import { getMunicipalReport } from '../services/reportService.js'
 
 const DATE_FORMATTER = new Intl.DateTimeFormat('es-CR', {
@@ -60,7 +62,7 @@ export default function MunicipalReportDetail({
       <main className="citizen-reports-main">
         <div className="report-page-heading">
           <button className="back-link" type="button" onClick={goToInbox}>
-            <span aria-hidden="true">←</span> Volver a la bandeja
+            <Icon name="arrowLeft" />Volver a la bandeja
           </button>
         </div>
 
@@ -106,7 +108,7 @@ export default function MunicipalReportDetail({
             <dl className="report-detail-grid">
               <div className="report-detail-description">
                 <dt>Descripción del problema</dt>
-                <dd>{report.description}</dd>
+                <dd>{report.description || 'Descripción mediante nota de voz.'}</dd>
               </div>
               <div>
                 <dt>Categoría</dt>
@@ -134,6 +136,7 @@ export default function MunicipalReportDetail({
               </div>
             </dl>
 
+            <ReportCaptureDetails report={report} />
             <EvidenceGallery photos={report.photos} />
 
             <MunicipalReportActions

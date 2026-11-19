@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AppHeader } from './Dashboard.jsx'
 import { getCitizenNotifications, markNotificationRead } from '../services/reportService.js'
+import Icon from './Icon.jsx'
 
 const DATE_FORMATTER = new Intl.DateTimeFormat('es-CR', { dateStyle: 'medium', timeStyle: 'short' })
 
@@ -47,7 +48,7 @@ export default function CitizenNotifications({ user, onNavigate, onSignOut }) {
       <AppHeader user={user} onNavigate={onNavigate} onSignOut={onSignOut} />
       <main className="citizen-reports-main">
         <div className="report-page-heading">
-          <button className="back-link" type="button" onClick={() => onNavigate('/ciudadano')}><span aria-hidden="true">←</span> Volver al inicio</button>
+          <button className="back-link" type="button" onClick={() => onNavigate('/ciudadano')}><Icon name="arrowLeft" />Volver al inicio</button>
           <span className="eyebrow">Seguimiento ciudadano</span>
           <h1>Mis notificaciones</h1>
           <p>Consultá la recepción y los cambios de estado de tus reportes.</p>
@@ -80,7 +81,7 @@ export default function CitizenNotifications({ user, onNavigate, onSignOut }) {
               {result.notifications.map((notification) => (
                 <li key={notification.id}>
                   <button className={`notification-item ${notification.readAt ? 'is-read' : 'is-unread'}`} type="button" onClick={() => openNotification(notification)} disabled={openingId !== null}>
-                    <span className="notification-symbol" aria-hidden="true">{notification.readAt ? '✓' : '●'}</span>
+                    <span className="notification-symbol" aria-hidden="true"><Icon name={notification.readAt ? 'check' : 'bell'} /></span>
                     <span className="notification-copy">
                       <span className="notification-heading">
                         <strong>{notification.type === 'received' ? 'Recibimos tu reporte' : 'Cambió el estado de tu reporte'}</strong>
@@ -91,7 +92,7 @@ export default function CitizenNotifications({ user, onNavigate, onSignOut }) {
                         <span className="report-status" data-status={notification.newStatus}>{notification.newStatus}</span>
                         <time dateTime={notification.createdAt}>{DATE_FORMATTER.format(new Date(notification.createdAt))}</time>
                       </span>
-                      <span className="notification-action">{openingId === notification.id ? 'Abriendo reporte…' : 'Consultar reporte →'}</span>
+                      <span className="notification-action">{openingId === notification.id ? 'Abriendo reporte…' : <>Consultar reporte <Icon name="arrowRight" /></>}</span>
                     </span>
                   </button>
                 </li>

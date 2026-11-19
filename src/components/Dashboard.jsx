@@ -1,3 +1,5 @@
+import Icon from './Icon.jsx'
+
 function BrandMark() {
   return (
     <span className="brand-mark" aria-hidden="true">
@@ -124,7 +126,7 @@ function CitizenHome({ user, onNavigate }) {
             className="button button-white"
             onClick={() => onNavigate('/ciudadano/reportes/nuevo')}
           >
-            Preparar un reporte <span aria-hidden="true">→</span>
+            Preparar un reporte <Icon name="arrowRight" />
           </button>
         </div>
         <div className="welcome-symbol" aria-hidden="true">
@@ -147,14 +149,14 @@ function CitizenHome({ user, onNavigate }) {
             className="action-card"
             onClick={() => onNavigate('/ciudadano/reportes/nuevo')}
           >
-            <span className="action-icon action-icon-green" aria-hidden="true">
-              +
+            <span className="action-icon action-icon-primary" aria-hidden="true">
+              <Icon name="plus" />
             </span>
             <span className="action-card-title">Crear un reporte</span>
             <span className="action-card-copy">
               Prepará la descripción de una situación en tu comunidad.
             </span>
-            <span className="action-card-link">Ir a la sección <span aria-hidden="true">→</span></span>
+            <span className="action-card-link">Crear reporte <Icon name="arrowRight" /></span>
           </button>
 
           <button
@@ -162,28 +164,23 @@ function CitizenHome({ user, onNavigate }) {
             onClick={() => onNavigate('/ciudadano/reportes')}
           >
             <span className="action-icon action-icon-blue" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M5 5.5h14v13H5v-13Zm3 4h8m-8 4h5"
-                  stroke="currentColor"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="1.8"
-                />
-              </svg>
+              <Icon name="file" />
             </span>
             <span className="action-card-title">Consultar mis reportes</span>
             <span className="action-card-copy">
               Revisá los casos que registraste y el estado actual de cada uno.
             </span>
-            <span className="action-card-link">Ir a la sección <span aria-hidden="true">→</span></span>
+            <span className="action-card-link">Ver mis reportes <Icon name="arrowRight" /></span>
+          </button>
+          <button className="action-card" onClick={() => onNavigate('/ciudadano/notificaciones')}>
+            <span className="action-icon action-icon-blue"><Icon name="bell" /></span>
+            <span className="action-card-title">Mis notificaciones</span>
+            <span className="action-card-copy">Consultá los avisos y las novedades sobre la atención de tus reportes.</span>
+            <span className="action-card-link">Ver notificaciones <Icon name="arrowRight" /></span>
           </button>
         </div>
       </section>
 
-      <p className="dashboard-disclaimer">
-        Tu cuenta se almacena en la base de datos JSON local de esta demostración.
-      </p>
     </>
   )
 }
@@ -204,9 +201,9 @@ function MunicipalHome({ onNavigate }) {
           </svg>
         </span>
         <span>
-          <span className="eyebrow">Vista de demostración</span>
+          <span className="eyebrow">Atención ciudadana</span>
           <h1>Espacio municipal</h1>
-          <p>Sesión iniciada con una cuenta ficticia de personal municipal.</p>
+          <p>Revisá y coordiná la atención de los reportes de la comunidad.</p>
         </span>
         <span className="role-pill role-pill-large">Rol: Municipal</span>
       </section>
@@ -226,7 +223,7 @@ function MunicipalHome({ onNavigate }) {
         <span className="eyebrow">Gestión municipal</span>
         <h2 id="municipal-ready">Bandeja de reportes</h2>
         <p>
-          Consultá los reportes de la municipalidad de demostración y filtralos
+          Consultá los reportes recibidos y filtralos
           por categoría o estado. Abrí un caso para revisar sus evidencias,
           corregir la categoría o actualizar su estado.
         </p>
@@ -235,7 +232,7 @@ function MunicipalHome({ onNavigate }) {
           type="button"
           onClick={() => onNavigate('/municipal/reportes')}
         >
-          Abrir la bandeja <span aria-hidden="true">→</span>
+          Abrir la bandeja <Icon name="arrowRight" />
         </button>
       </section>
     </>

@@ -11,8 +11,11 @@ node_modules
 dist
 dist-ssr
 *.local
-data/database.json
-data/database.json.tmp-*
+.env
+.env.*
+!.env.example
+data/database.local.json
+data/*.tmp-*
 
 # Editor directories and files
 .vscode/*

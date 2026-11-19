@@ -200,9 +200,9 @@ export default function AuthScreen({
           <span className="eyebrow">
             {isRegister ? 'Unite a tu comunidad' : 'Bienvenido de nuevo'}
           </span>
-          <h2 id="auth-title">
+          <h1 id="auth-title">
             {isRegister ? 'Crear cuenta' : 'Ingresar a tu cuenta'}
-          </h2>
+          </h1>
           <p className="auth-description">
             {isRegister
               ? 'Registrate para crear y consultar tus reportes ciudadanos.'
@@ -329,8 +329,7 @@ export default function AuthScreen({
               <div className="accounts-heading">
                 <strong>Cuentas</strong>
                 <p>
-                  Elegí una cuenta para completar sus datos de inicio de sesión
-                  de demostración.
+                  Elegí una cuenta disponible para completar el acceso.
                 </p>
               </div>
               {isLoadingAccounts ? (
